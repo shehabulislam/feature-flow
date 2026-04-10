@@ -7,15 +7,17 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  password      String
-  avatarUrl     String?
-  role          String    @default("customer") // "owner" | "customer"
-  plan          String    @default("free") // "free" | "pro" | "team"
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  email             String    @unique
+  name              String?
+  password          String
+  avatarUrl         String?
+  role              String    @default("customer") // "owner" | "customer"
+  plan              String    @default("free") // "free" | "pro" | "team"
+  resetToken        String?   @unique
+  resetTokenExpiry  DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   projects      Project[]
   feedbacks     Feedback[]
@@ -40,20 +42,23 @@ model Subscription {
 }
 
 model Project {
-  id            String    @id @default(cuid())
-  ownerId       String
-  name          String
-  slug          String    @unique
-  description   String?
-  logoUrl       String?
-  websiteUrl    String?
-  customDomain  String?   @unique
-  customCss     String?
-  webhookUrl    String?
-  primaryColor  String    @default("#6366f1")
-  isPublic      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  ownerId               String
+  name                  String
+  slug                  String    @unique
+  description           String?
+  logoUrl               String?
+  websiteUrl            String?
+  customDomain          String?   @unique
+  customCss             String?
+  webhookUrl            String?
+  primaryColor          String    @default("#6366f1")
+  isPublic              Boolean   @default(true)
+  hideAppName           Boolean   @default(false)
+  feedbackNameRequired  Boolean   @default(true)
+  feedbackEmailRequired Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   owner         User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   boards        Board[]
@@ -155,6 +160,7 @@ model ChangelogEntry {
   type          String    @default("feature") // feature, improvement, bugfix, breaking
   isPublished   Boolean   @default(false)
   publishedAt   DateTime?
+  displayDate   DateTime  @default(now()) @map("display_date")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

@@ -75,12 +75,20 @@ export async function POST(
     );
   }
 
-  // Name and email are required for non-logged-in users
-  if (!session?.user?.id && (!authorName || !authorEmail)) {
-    return Response.json(
-      { error: "Name and email are required" },
-      { status: 400 }
-    );
+  // Name and email are conditionally required based on project settings
+  if (!session?.user?.id) {
+    if (project.feedbackNameRequired && !authorName) {
+      return Response.json(
+        { error: "Name is required" },
+        { status: 400 }
+      );
+    }
+    if (project.feedbackEmailRequired && !authorEmail) {
+      return Response.json(
+        { error: "Email is required" },
+        { status: 400 }
+      );
+    }
   }
 
   let userId = session?.user?.id || null;

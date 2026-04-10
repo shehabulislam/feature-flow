@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Loader2, Trash2, X, Eye, EyeOff, FileText } from "lucide-react";
+import { Plus, Loader2, Trash2, X, Eye, EyeOff, FileText, Pencil, Calendar } from "lucide-react";
 import toast from "react-hot-toast";
-import { formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 
 interface ChangelogEntry {
   id: string;
@@ -13,6 +13,7 @@ interface ChangelogEntry {
   type: string;
   isPublished: boolean;
   publishedAt: string | null;
+  displayDate: string;
   createdAt: string;
 }
 
@@ -34,22 +35,38 @@ export default function ChangelogPage() {
   const [entries, setEntries] = useState<ChangelogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<ChangelogEntry | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [version, setVersion] = useState("");
   const [type, setType] = useState("feature");
   const [isPublished, setIsPublished] = useState(false);
+  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [saving, setSaving] = useState(false);
 
+  // Remember last selected project
   useEffect(() => {
     fetch("/api/projects")
       .then((r) => r.json())
       .then((data) => {
         setProjects(data.projects || []);
-        if (data.projects?.length > 0) setSelectedProject(data.projects[0].slug);
+        const saved = localStorage.getItem("featureflow-last-project");
+        const proj = data.projects?.find((p: Project) => p.slug === saved);
+        if (proj) {
+          setSelectedProject(proj.slug);
+        } else if (data.projects?.length > 0) {
+          setSelectedProject(data.projects[0].slug);
+        }
         setLoading(false);
       });
   }, []);
+
+  // Persist project selection
+  useEffect(() => {
+    if (selectedProject) {
+      localStorage.setItem("featureflow-last-project", selectedProject);
+    }
+  }, [selectedProject]);
 
   const fetchEntries = useCallback(async () => {
     if (!selectedProject) return;
@@ -64,27 +81,71 @@ export default function ChangelogPage() {
     fetchEntries();
   }, [fetchEntries]);
 
-  const addEntry = async () => {
+  const resetForm = () => {
+    setTitle("");
+    setContent("");
+    setVersion("");
+    setType("feature");
+    setIsPublished(false);
+    setDate(format(new Date(), "yyyy-MM-dd"));
+    setEditingEntry(null);
+  };
+
+  const openCreateModal = () => {
+    resetForm();
+    setShowModal(true);
+  };
+
+  const openEditModal = (entry: ChangelogEntry) => {
+    setEditingEntry(entry);
+    setTitle(entry.title);
+    setContent(entry.content);
+    setVersion(entry.version || "");
+    setType(entry.type);
+    setIsPublished(entry.isPublished);
+    setDate(format(new Date(entry.displayDate), "yyyy-MM-dd"));
+    setShowModal(true);
+  };
+
+  const saveEntry = async () => {
     if (!title || !content) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/projects/${selectedProject}/changelog`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content, version: version || null, type, isPublished }),
-      });
-      if (res.ok) {
-        toast.success(isPublished ? "Changelog published!" : "Draft saved");
-        setShowModal(false);
-        setTitle("");
-        setContent("");
-        setVersion("");
-        setType("feature");
-        setIsPublished(false);
-        fetchEntries();
+      if (editingEntry) {
+        // Update existing
+        const res = await fetch(`/api/changelog/${editingEntry.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, content, version: version || null, type, isPublished, date }),
+        });
+        if (res.ok) {
+          toast.success("Entry updated!");
+          setShowModal(false);
+          resetForm();
+          fetchEntries();
+        } else {
+          const data = await res.json();
+          toast.error(data.error || "Failed to update entry");
+        }
+      } else {
+        // Create new
+        const res = await fetch(`/api/projects/${selectedProject}/changelog`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, content, version: version || null, type, isPublished, date }),
+        });
+        if (res.ok) {
+          toast.success(isPublished ? "Changelog published!" : "Draft saved");
+          setShowModal(false);
+          resetForm();
+          fetchEntries();
+        } else {
+          const data = await res.json();
+          toast.error(data.error || "Failed to create entry");
+        }
       }
     } catch {
-      toast.error("Failed to create entry");
+      toast.error("Failed to save entry");
     } finally {
       setSaving(false);
     }
@@ -92,13 +153,18 @@ export default function ChangelogPage() {
 
   const togglePublish = async (id: string, current: boolean) => {
     try {
-      await fetch(`/api/changelog/${id}`, {
+      const res = await fetch(`/api/changelog/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isPublished: !current }),
       });
-      toast.success(!current ? "Published!" : "Unpublished");
-      fetchEntries();
+      if (res.ok) {
+        toast.success(!current ? "Published!" : "Unpublished");
+        fetchEntries();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to update");
+      }
     } catch {
       toast.error("Failed to update");
     }
@@ -107,9 +173,14 @@ export default function ChangelogPage() {
   const deleteEntry = async (id: string) => {
     if (!confirm("Delete this changelog entry?")) return;
     try {
-      await fetch(`/api/changelog/${id}`, { method: "DELETE" });
-      toast.success("Deleted");
-      fetchEntries();
+      const res = await fetch(`/api/changelog/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Deleted");
+        fetchEntries();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to delete");
+      }
     } catch {
       toast.error("Failed to delete");
     }
@@ -135,7 +206,7 @@ export default function ChangelogPage() {
             </select>
           )}
           <button
-            onClick={() => setShowModal(true)}
+            onClick={openCreateModal}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold transition-all hover:shadow-lg hover:shadow-primary/25 active:scale-95"
           >
             <Plus className="w-4 h-4" />
@@ -156,7 +227,7 @@ export default function ChangelogPage() {
             Create your first entry to announce updates to your users.
           </p>
           <button
-            onClick={() => setShowModal(true)}
+            onClick={openCreateModal}
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-all"
           >
             <Plus className="w-4 h-4" />
@@ -195,11 +266,19 @@ export default function ChangelogPage() {
                   <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
                     {entry.content}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-3">
-                    {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
+                  <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1.5">
+                    <Calendar className="w-3 h-3" />
+                    {format(new Date(entry.displayDate), "MMM d, yyyy")}
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => openEditModal(entry)}
+                    className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
+                    title="Edit"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => togglePublish(entry.id, entry.isPublished)}
                     className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
@@ -220,13 +299,13 @@ export default function ChangelogPage() {
         </div>
       )}
 
-      {/* Add Modal */}
+      {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6">
           <div className="w-full max-w-2xl bg-surface rounded-2xl border border-border shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-surface z-10">
-              <h3 className="text-lg font-bold">New changelog entry</h3>
-              <button onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground">
+              <h3 className="text-lg font-bold">{editingEntry ? "Edit changelog entry" : "New changelog entry"}</h3>
+              <button onClick={() => { setShowModal(false); resetForm(); }} className="text-muted-foreground hover:text-foreground">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -241,7 +320,7 @@ export default function ChangelogPage() {
                   className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Version</label>
                   <input
@@ -264,6 +343,15 @@ export default function ChangelogPage() {
                     <option value="bugfix">Bug Fix</option>
                     <option value="breaking">Breaking Change</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Date</label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
                 </div>
               </div>
               <div>
@@ -288,18 +376,21 @@ export default function ChangelogPage() {
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-border">
               <button
-                onClick={() => setShowModal(false)}
+                onClick={() => { setShowModal(false); resetForm(); }}
                 className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted/50 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={addEntry}
+                onClick={saveEntry}
                 disabled={saving || !title || !content}
                 className="px-5 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold transition-all disabled:opacity-60 flex items-center gap-2"
               >
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isPublished ? "Publish" : "Save Draft"}
+                {editingEntry
+                  ? "Update"
+                  : isPublished ? "Publish" : "Save Draft"
+                }
               </button>
             </div>
           </div>

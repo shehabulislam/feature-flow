@@ -16,11 +16,17 @@ import {
   X,
   ChevronDown,
   Shield,
+  KeyRound,
+  Loader2,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 
 import ThemeToggle from "@/components/ThemeToggle";
 import { isSuperAdmin } from "@/lib/superadmin";
+import toast from "react-hot-toast";
+
+import { CreditCard, Webhook } from "lucide-react";
 
 interface DashboardShellProps {
   user: {
@@ -31,13 +37,12 @@ interface DashboardShellProps {
   children: React.ReactNode;
 }
 
-import { CreditCard, Webhook } from "lucide-react";
-
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Overview" },
   { href: "/dashboard/feedback", icon: MessageSquare, label: "Feedback" },
   { href: "/dashboard/roadmap", icon: Map, label: "Roadmap" },
   { href: "/dashboard/changelog", icon: FileText, label: "Changelog" },
+  { href: "/dashboard/customers", icon: Users, label: "Customers" },
   { href: "/dashboard/webhooks", icon: Webhook, label: "Webhooks" },
   { href: "/dashboard/settings", icon: Settings, label: "Settings" },
   { href: "/dashboard/billing", icon: CreditCard, label: "Billing" },
@@ -48,6 +53,13 @@ export default function DashboardShell({ user, children }: DashboardShellProps) 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
+  // Password change modal
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
   const isAdmin = isSuperAdmin(user.email);
 
   // Build nav items dynamically
@@ -57,6 +69,39 @@ export default function DashboardShell({ user, children }: DashboardShellProps) 
       ? [{ href: "/dashboard/admin", icon: Shield, label: "Admin" }]
       : []),
   ];
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords don't match");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Password updated!");
+        setShowPasswordModal(false);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        toast.error(data.error || "Failed to change password");
+      }
+    } catch {
+      toast.error("Something went wrong");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -168,6 +213,16 @@ export default function DashboardShell({ user, children }: DashboardShellProps) 
                   </div>
                 )}
                 <button
+                  onClick={() => {
+                    setShowPasswordModal(true);
+                    setUserMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  Change Password
+                </button>
+                <button
                   onClick={() => signOut({ callbackUrl: "/" })}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-danger hover:bg-danger/10 rounded-lg transition-colors"
                 >
@@ -205,6 +260,72 @@ export default function DashboardShell({ user, children }: DashboardShellProps) 
           {children}
         </main>
       </div>
+
+      {/* Password Change Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-6">
+          <div className="w-full max-w-md bg-surface rounded-2xl border border-border shadow-2xl animate-scale-in">
+            <div className="flex items-center justify-between p-6 border-b border-border">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-primary" />
+                Change Password
+              </h3>
+              <button onClick={() => setShowPasswordModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Current password</label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5">New password</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Must be at least 8 characters</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Confirm new password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-6 border-t border-border">
+              <button
+                onClick={() => setShowPasswordModal(false)}
+                className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted/50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleChangePassword}
+                disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
+                className="px-5 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold transition-all disabled:opacity-60 flex items-center gap-2"
+              >
+                {changingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
+                Update Password
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

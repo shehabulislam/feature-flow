@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isSuperAdmin } from "@/lib/superadmin";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -38,7 +39,8 @@ export async function POST(
   const { slug } = await params;
   const project = await prisma.project.findUnique({ where: { slug } });
 
-  if (!project || project.ownerId !== session.user.id) {
+  const isAdmin = isSuperAdmin(session?.user?.email);
+  if (!project || (!isAdmin && project.ownerId !== session.user.id)) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 

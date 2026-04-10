@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Loader2, GripVertical, Trash2, X } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Plus, Loader2, GripVertical, Trash2, X, ArrowUp, ArrowDown } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface RoadmapItem {
@@ -37,15 +37,28 @@ export default function RoadmapPage() {
   const [newQuarter, setNewQuarter] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Remember last selected project
   useEffect(() => {
     fetch("/api/projects")
       .then((r) => r.json())
       .then((data) => {
         setProjects(data.projects || []);
-        if (data.projects?.length > 0) setSelectedProject(data.projects[0].slug);
+        const saved = localStorage.getItem("featureflow-last-project");
+        const proj = data.projects?.find((p: Project) => p.slug === saved);
+        if (proj) {
+          setSelectedProject(proj.slug);
+        } else if (data.projects?.length > 0) {
+          setSelectedProject(data.projects[0].slug);
+        }
         setLoading(false);
       });
   }, []);
+
+  useEffect(() => {
+    if (selectedProject) {
+      localStorage.setItem("featureflow-last-project", selectedProject);
+    }
+  }, [selectedProject]);
 
   const fetchItems = useCallback(async () => {
     if (!selectedProject) return;
@@ -91,12 +104,17 @@ export default function RoadmapPage() {
 
   const updateItemStatus = async (id: string, status: string) => {
     try {
-      await fetch(`/api/roadmap/${id}`, {
+      const res = await fetch(`/api/roadmap/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      fetchItems();
+      if (res.ok) {
+        fetchItems();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to update");
+      }
     } catch {
       toast.error("Failed to update");
     }
@@ -105,15 +123,63 @@ export default function RoadmapPage() {
   const deleteItem = async (id: string) => {
     if (!confirm("Delete this roadmap item?")) return;
     try {
-      await fetch(`/api/roadmap/${id}`, { method: "DELETE" });
-      toast.success("Item deleted");
-      fetchItems();
+      const res = await fetch(`/api/roadmap/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Item deleted");
+        fetchItems();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to delete");
+      }
     } catch {
       toast.error("Failed to delete");
     }
   };
 
-  const getColumnItems = (status: string) => items.filter((i) => i.status === status);
+  const moveItem = async (id: string, status: string, direction: "up" | "down") => {
+    const columnItems = items
+      .filter((i) => i.status === status)
+      .sort((a, b) => a.position - b.position);
+    
+    const idx = columnItems.findIndex((i) => i.id === id);
+    if (idx === -1) return;
+    if (direction === "up" && idx === 0) return;
+    if (direction === "down" && idx === columnItems.length - 1) return;
+
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    const updatedItems = [...columnItems];
+    [updatedItems[idx], updatedItems[swapIdx]] = [updatedItems[swapIdx], updatedItems[idx]];
+
+    // Optimistic update
+    const reordered = updatedItems.map((item, i) => ({ ...item, position: i }));
+    setItems((prev) =>
+      prev.map((item) => {
+        const updated = reordered.find((r) => r.id === item.id);
+        return updated ? { ...item, position: updated.position } : item;
+      })
+    );
+
+    // Save to server
+    try {
+      await fetch(`/api/roadmap/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: reordered.map((item) => ({
+            id: item.id,
+            position: item.position,
+            status: item.status,
+          })),
+        }),
+      });
+    } catch {
+      toast.error("Failed to reorder");
+      fetchItems();
+    }
+  };
+
+  const getColumnItems = (status: string) =>
+    items.filter((i) => i.status === status).sort((a, b) => a.position - b.position);
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -150,66 +216,86 @@ export default function RoadmapPage() {
         </div>
       ) : (
         <div className="grid md:grid-cols-3 gap-6">
-          {Object.entries(columnConfig).map(([status, config]) => (
-            <div key={status} className={`rounded-2xl border border-border bg-surface border-t-4 ${config.color}`}>
-              <div className="p-4 border-b border-border">
-                <h3 className="font-bold">{config.title}</h3>
-                <span className="text-sm text-muted-foreground">
-                  {getColumnItems(status).length} items
-                </span>
-              </div>
-              <div className="p-3 space-y-3 min-h-[200px]">
-                {getColumnItems(status).map((item) => (
-                  <div
-                    key={item.id}
-                    className="group p-4 rounded-xl border border-border bg-background hover:border-primary/30 hover:shadow-md transition-all duration-200"
-                  >
-                    <div className="flex items-start gap-2">
-                      <GripVertical className="w-4 h-4 text-muted-foreground/30 mt-0.5 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-sm mb-1">{item.title}</h4>
-                        {item.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                            {item.description}
-                          </p>
-                        )}
-                        {item.quarter && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
-                            {item.quarter}
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => deleteItem(item.id)}
-                        className="opacity-0 group-hover:opacity-100 text-danger/60 hover:text-danger transition-all"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    {/* Quick status change */}
-                    <div className="flex gap-1 mt-3 pt-2 border-t border-border/50">
-                      {Object.keys(columnConfig)
-                        .filter((s) => s !== status)
-                        .map((s) => (
+          {Object.entries(columnConfig).map(([status, config]) => {
+            const colItems = getColumnItems(status);
+            return (
+              <div key={status} className={`rounded-2xl border border-border bg-surface border-t-4 ${config.color}`}>
+                <div className="p-4 border-b border-border">
+                  <h3 className="font-bold">{config.title}</h3>
+                  <span className="text-sm text-muted-foreground">
+                    {colItems.length} items
+                  </span>
+                </div>
+                <div className="p-3 space-y-3 min-h-[200px]">
+                  {colItems.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className="group p-4 rounded-xl border border-border bg-background hover:border-primary/30 hover:shadow-md transition-all duration-200"
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="flex flex-col gap-0.5 shrink-0 mt-0.5">
                           <button
-                            key={s}
-                            onClick={() => updateItemStatus(item.id, s)}
-                            className="text-[10px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            onClick={() => moveItem(item.id, status, "up")}
+                            disabled={idx === 0}
+                            className="p-0.5 rounded hover:bg-muted disabled:opacity-20 text-muted-foreground transition-colors"
+                            title="Move up"
                           >
-                            → {s.replace("_", " ")}
+                            <ArrowUp className="w-3 h-3" />
                           </button>
-                        ))}
+                          <button
+                            onClick={() => moveItem(item.id, status, "down")}
+                            disabled={idx === colItems.length - 1}
+                            className="p-0.5 rounded hover:bg-muted disabled:opacity-20 text-muted-foreground transition-colors"
+                            title="Move down"
+                          >
+                            <ArrowDown className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-sm mb-1">{item.title}</h4>
+                          {item.description && (
+                            <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                              {item.description}
+                            </p>
+                          )}
+                          {item.quarter && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                              {item.quarter}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => deleteItem(item.id)}
+                          className="opacity-0 group-hover:opacity-100 text-danger/60 hover:text-danger transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      {/* Quick status change */}
+                      <div className="flex gap-1 mt-3 pt-2 border-t border-border/50">
+                        {Object.keys(columnConfig)
+                          .filter((s) => s !== status)
+                          .map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => updateItemStatus(item.id, s)}
+                              className="text-[10px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              → {s.replace("_", " ")}
+                            </button>
+                          ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {getColumnItems(status).length === 0 && (
-                  <div className="py-8 text-center text-sm text-muted-foreground/50">
-                    No items
-                  </div>
-                )}
+                  ))}
+                  {colItems.length === 0 && (
+                    <div className="py-8 text-center text-sm text-muted-foreground/50">
+                      No items
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

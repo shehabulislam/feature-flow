@@ -61,6 +61,8 @@ export default function PublicFeedbackPage() {
   const [commentName, setCommentName] = useState("");
   const [commentEmail, setCommentEmail] = useState("");
   const [upvotedIds, setUpvotedIds] = useState<Set<string>>(new Set());
+  const [nameRequired, setNameRequired] = useState(true);
+  const [emailRequired, setEmailRequired] = useState(true);
 
   // Restore saved user info from localStorage
   useEffect(() => {
@@ -72,7 +74,17 @@ export default function PublicFeedbackPage() {
         if (email) { setFormEmail(email); setCommentEmail(email); }
       } catch { /* ignore */ }
     }
-  }, []);
+    // Fetch project config
+    fetch(`/api/projects/${slug}/config`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.config) {
+          setNameRequired(data.config.feedbackNameRequired ?? true);
+          setEmailRequired(data.config.feedbackEmailRequired ?? true);
+        }
+      })
+      .catch(() => { /* ignore */ });
+  }, [slug]);
 
   const fetchFeedbacks = useCallback(async () => {
     setLoading(true);
@@ -130,8 +142,16 @@ export default function PublicFeedbackPage() {
   };
 
   const submitFeedback = async () => {
-    if (!formTitle || !formDesc || !formName || !formEmail) {
-      toast.error("Please fill in all required fields");
+    if (!formTitle || !formDesc) {
+      toast.error("Please fill in title and description");
+      return;
+    }
+    if (nameRequired && !formName) {
+      toast.error("Please enter your name");
+      return;
+    }
+    if (emailRequired && !formEmail) {
+      toast.error("Please enter your email");
       return;
     }
     setSubmitting(true);
@@ -176,8 +196,16 @@ export default function PublicFeedbackPage() {
   };
 
   const submitComment = async () => {
-    if (!newComment || !selectedId || !commentName || !commentEmail) {
-      toast.error("Please enter your name, email, and comment");
+    if (!newComment || !selectedId) {
+      toast.error("Please enter a comment");
+      return;
+    }
+    if (nameRequired && !commentName) {
+      toast.error("Please enter your name");
+      return;
+    }
+    if (emailRequired && !commentEmail) {
+      toast.error("Please enter your email");
       return;
     }
     try {
@@ -400,23 +428,27 @@ export default function PublicFeedbackPage() {
                   </div>
                 )}
 
-                {/* Add comment - with name and email */}
+                {/* Add comment - with optional name and email */}
                 <div className="space-y-2">
                   <div className="flex gap-2">
+                    {(nameRequired || commentName) && (
                     <input
                       type="text"
                       value={commentName}
                       onChange={(e) => setCommentName(e.target.value)}
-                      placeholder="Your name *"
+                      placeholder={nameRequired ? "Your name *" : "Your name"}
                       className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                     />
+                    )}
+                    {(emailRequired || commentEmail) && (
                     <input
                       type="email"
                       value={commentEmail}
                       onChange={(e) => setCommentEmail(e.target.value)}
-                      placeholder="Your email *"
+                      placeholder={emailRequired ? "Your email *" : "Your email"}
                       className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                     />
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <input
@@ -429,7 +461,7 @@ export default function PublicFeedbackPage() {
                     />
                     <button
                       onClick={submitComment}
-                      disabled={!newComment || !commentName || !commentEmail}
+                      disabled={!newComment || (nameRequired && !commentName) || (emailRequired && !commentEmail)}
                       className="px-3 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white transition-colors disabled:opacity-40"
                     >
                       <Send className="w-4 h-4" />
@@ -454,8 +486,9 @@ export default function PublicFeedbackPage() {
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
+                {(nameRequired || formName) && (
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Your name <span className="text-danger">*</span></label>
+                  <label className="block text-sm font-medium mb-1.5">Your name {nameRequired && <span className="text-danger">*</span>}</label>
                   <input
                     type="text"
                     value={formName}
@@ -464,8 +497,10 @@ export default function PublicFeedbackPage() {
                     className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
                 </div>
+                )}
+                {(emailRequired || formEmail) && (
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Email <span className="text-danger">*</span></label>
+                  <label className="block text-sm font-medium mb-1.5">Email {emailRequired && <span className="text-danger">*</span>}</label>
                   <input
                     type="email"
                     value={formEmail}
@@ -474,6 +509,7 @@ export default function PublicFeedbackPage() {
                     className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
                 </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1.5">Title <span className="text-danger">*</span></label>
@@ -521,7 +557,7 @@ export default function PublicFeedbackPage() {
               </button>
               <button
                 onClick={submitFeedback}
-                disabled={submitting || !formTitle || !formDesc || !formName || !formEmail}
+                disabled={submitting || !formTitle || !formDesc || (nameRequired && !formName) || (emailRequired && !formEmail)}
                 className="px-5 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold transition-all disabled:opacity-60 flex items-center gap-2"
               >
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}

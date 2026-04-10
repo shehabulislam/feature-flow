@@ -43,12 +43,22 @@ export default function FeedbackPage() {
       .then((r) => r.json())
       .then((data) => {
         setProjects(data.projects || []);
-        if (data.projects?.length > 0) {
+        const saved = localStorage.getItem("featureflow-last-project");
+        const proj = data.projects?.find((p: Project) => p.slug === saved);
+        if (proj) {
+          setSelectedProject(proj.slug);
+        } else if (data.projects?.length > 0) {
           setSelectedProject(data.projects[0].slug);
         }
         setLoading(false);
       });
   }, []);
+
+  useEffect(() => {
+    if (selectedProject) {
+      localStorage.setItem("featureflow-last-project", selectedProject);
+    }
+  }, [selectedProject]);
 
   const fetchFeedbacks = useCallback(async () => {
     if (!selectedProject) return;

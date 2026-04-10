@@ -15,7 +15,15 @@ export default async function PublicProjectLayout({
 
   const project = await prisma.project.findUnique({
     where: { slug },
-    select: { name: true, slug: true, primaryColor: true, description: true, logoUrl: true, customCss: true },
+    select: {
+      name: true,
+      slug: true,
+      primaryColor: true,
+      description: true,
+      logoUrl: true,
+      customCss: true,
+      hideAppName: true,
+    },
   });
 
   if (!project) notFound();
@@ -45,7 +53,10 @@ export default async function PublicProjectLayout({
                 <Zap className="w-4 h-4 text-white" />
               </div>
             )}
-            <span className="text-lg font-bold">{project.name}</span>
+            {/* Item 9: only show name if hideAppName is false */}
+            {!project.hideAppName && (
+              <span className="text-lg font-bold">{project.name}</span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <nav className="flex items-center gap-1">

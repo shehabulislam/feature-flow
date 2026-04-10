@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isSuperAdmin } from "@/lib/superadmin";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -20,7 +21,7 @@ export async function GET(
 
   const changelogs = await prisma.changelogEntry.findMany({
     where,
-    orderBy: { publishedAt: "desc" },
+    orderBy: { displayDate: "desc" },
   });
 
   return Response.json({ changelogs });
@@ -38,12 +39,13 @@ export async function POST(
   const { slug } = await params;
   const project = await prisma.project.findUnique({ where: { slug } });
 
-  if (!project || project.ownerId !== session.user.id) {
+  const isAdmin = isSuperAdmin(session?.user?.email);
+  if (!project || (!isAdmin && project.ownerId !== session.user.id)) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = await request.json();
-  const { title, content, version, type = "feature", isPublished = false } = body;
+  const { title, content, version, type = "feature", isPublished = false, date } = body;
 
   if (!title || !content) {
     return Response.json(
@@ -60,6 +62,7 @@ export async function POST(
       type,
       isPublished,
       publishedAt: isPublished ? new Date() : null,
+      displayDate: date ? new Date(date) : new Date(),
       projectId: project.id,
     },
   });

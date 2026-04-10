@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, Copy, Check, ExternalLink, Code2, Globe, Palette, Image as ImageIcon, Link as LinkIcon, Box, Code } from "lucide-react";
+import { Loader2, Copy, Check, ExternalLink, Code2, Globe, Palette, Image as ImageIcon, Link as LinkIcon, Box, Code, MessageSquare, EyeOff } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import toast from "react-hot-toast";
 import { useSession } from "next-auth/react";
@@ -18,7 +18,9 @@ interface Project {
   logoUrl: string | null;
   customDomain: string | null;
   customCss: string | null;
-
+  hideAppName: boolean;
+  feedbackNameRequired: boolean;
+  feedbackEmailRequired: boolean;
 }
 
 type PageType = "feedback" | "roadmap" | "changelog";
@@ -40,36 +42,49 @@ export default function SettingsPage() {
   const [embedPage, setEmbedPage] = useState<PageType>("feedback");
   const [savingColor, setSavingColor] = useState(false);
   const [savingAdvanced, setSavingAdvanced] = useState(false);
+  const [savingFeedback, setSavingFeedback] = useState(false);
 
   const [logoUrl, setLogoUrl] = useState("");
   const [customDomain, setCustomDomain] = useState("");
-
   const [customCss, setCustomCss] = useState("");
+  const [hideAppName, setHideAppName] = useState(false);
+  const [feedbackNameRequired, setFeedbackNameRequired] = useState(true);
+  const [feedbackEmailRequired, setFeedbackEmailRequired] = useState(true);
+  const [customButtonText, setCustomButtonText] = useState("Feedback");
 
+  // Remember last selected project
   useEffect(() => {
     fetch("/api/projects")
       .then((r) => r.json())
       .then((data) => {
         const projs = data.projects || [];
         setProjects(projs);
-        if (projs.length > 0) {
-          const first = projs[0];
-          setSelected(first);
-          setLogoUrl(first.logoUrl || "");
-          setCustomDomain(first.customDomain || "");
-          setCustomCss(first.customCss || "");
+        const saved = localStorage.getItem("featureflow-last-project");
+        const proj = projs.find((p: Project) => p.slug === saved);
+        if (proj) {
+          applySelection(proj);
+        } else if (projs.length > 0) {
+          applySelection(projs[0]);
         }
         setLoading(false);
       });
   }, []);
 
+  const applySelection = (proj: Project) => {
+    setSelected(proj);
+    setLogoUrl(proj.logoUrl || "");
+    setCustomDomain(proj.customDomain || "");
+    setCustomCss(proj.customCss || "");
+    setHideAppName(proj.hideAppName || false);
+    setFeedbackNameRequired(proj.feedbackNameRequired ?? true);
+    setFeedbackEmailRequired(proj.feedbackEmailRequired ?? true);
+  };
+
   const changeSelected = (slug: string) => {
     const proj = projects.find((p) => p.slug === slug);
     if (proj) {
-      setSelected(proj);
-      setLogoUrl(proj.logoUrl || "");
-      setCustomDomain(proj.customDomain || "");
-      setCustomCss(proj.customCss || "");
+      applySelection(proj);
+      localStorage.setItem("featureflow-last-project", slug);
     }
   };
 
@@ -114,6 +129,7 @@ export default function SettingsPage() {
           logoUrl: logoUrl || null,
           customDomain: customDomain || null,
           customCss: customCss || null,
+          hideAppName,
         }),
       });
       if (res.ok) {
@@ -131,6 +147,33 @@ export default function SettingsPage() {
       toast.error("An error occurred. Try again.");
     } finally {
       setSavingAdvanced(false);
+    }
+  };
+
+  const saveFeedbackSettings = async () => {
+    if (!selected) return;
+    setSavingFeedback(true);
+    try {
+      const res = await fetch(`/api/projects/${selected.slug}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedbackNameRequired, feedbackEmailRequired }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSelected(updated.project);
+        setProjects((prev) =>
+          prev.map((p) => (p.slug === selected.slug ? updated.project : p))
+        );
+        toast.success("Feedback settings saved!");
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to save settings");
+      }
+    } catch {
+      toast.error("An error occurred. Try again.");
+    } finally {
+      setSavingFeedback(false);
     }
   };
 
@@ -219,6 +262,24 @@ export default function SettingsPage() {
               className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
+
+          {/* Hide app name toggle (item 9) */}
+          <label className="flex items-center justify-between p-4 rounded-xl bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
+            <div className="flex items-center gap-3">
+              <EyeOff className="w-4 h-4 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Hide app name</p>
+                <p className="text-xs text-muted-foreground">Show only the logo on public pages (top-left corner)</p>
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={hideAppName}
+              onChange={(e) => setHideAppName(e.target.checked)}
+              className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+            />
+          </label>
+
           <div>
             <label className="block text-sm font-medium mb-1.5 flex items-center gap-1.5">
               <LinkIcon className="w-4 h-4 text-muted-foreground" /> Custom Domain
@@ -235,7 +296,6 @@ export default function SettingsPage() {
             </p>
           </div>
 
-
           {isOwnerOrSuper && (
             <div>
               <label className="block text-sm font-medium mb-1.5 flex items-center gap-1.5">
@@ -244,7 +304,7 @@ export default function SettingsPage() {
               <textarea
                 value={customCss}
                 onChange={(e) => setCustomCss(e.target.value)}
-                placeholder=":root { \n  --radius: 0px; \n}"
+                placeholder={":root { \n  --radius: 0px; \n}"}
                 rows={4}
                 className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y"
               />
@@ -261,6 +321,56 @@ export default function SettingsPage() {
               Save Changes
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* ═══════ Feedback Settings (item 1) ═══════ */}
+      <div className="p-6 rounded-2xl border border-border bg-surface space-y-5">
+        <div>
+          <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-blue-500" />
+            Feedback Form Settings
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Choose which fields are required when customers submit feedback.
+          </p>
+        </div>
+
+        <label className="flex items-center justify-between p-4 rounded-xl bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
+          <div>
+            <p className="text-sm font-medium">Require name</p>
+            <p className="text-xs text-muted-foreground">Customers must enter their name when submitting feedback</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={feedbackNameRequired}
+            onChange={(e) => setFeedbackNameRequired(e.target.checked)}
+            className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+          />
+        </label>
+
+        <label className="flex items-center justify-between p-4 rounded-xl bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
+          <div>
+            <p className="text-sm font-medium">Require email</p>
+            <p className="text-xs text-muted-foreground">Customers must enter their email when submitting feedback</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={feedbackEmailRequired}
+            onChange={(e) => setFeedbackEmailRequired(e.target.checked)}
+            className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+          />
+        </label>
+
+        <div className="flex justify-end">
+          <button
+            onClick={saveFeedbackSettings}
+            disabled={savingFeedback}
+            className="px-5 py-2.5 bg-primary hover:bg-primary-hover text-white text-sm font-semibold rounded-xl transition-all flex items-center gap-2"
+          >
+            {savingFeedback && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save Feedback Settings
+          </button>
         </div>
       </div>
 
@@ -426,7 +536,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Method 2: Popup Widget */}
+          {/* Method 2: Popup Widget (item 3 - custom button) */}
           <div className="p-4 rounded-xl border border-border bg-background">
             <div className="flex items-start gap-3 mb-3">
               <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400 text-sm font-bold shrink-0">2</div>
@@ -457,10 +567,54 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Method 3: Inline Widget */}
+          {/* Method 3: Custom Button Trigger (item 3) */}
           <div className="p-4 rounded-xl border border-border bg-background">
             <div className="flex items-start gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 text-sm font-bold shrink-0">3</div>
+              <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center text-pink-600 dark:text-pink-400 text-sm font-bold shrink-0">3</div>
+              <div>
+                <h3 className="text-sm font-semibold">Custom Button Trigger</h3>
+                <p className="text-xs text-muted-foreground">
+                  Attach the popup to your own button instead of using the floating button.
+                </p>
+              </div>
+            </div>
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Custom button text:</label>
+              <input
+                type="text"
+                value={customButtonText}
+                onChange={(e) => setCustomButtonText(e.target.value)}
+                placeholder="Feedback"
+                className="px-3 py-1.5 rounded-lg border border-border bg-surface text-sm w-48 focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <div className="relative">
+              <pre className="p-3 rounded-lg bg-muted text-xs font-mono overflow-x-auto">
+{`<!-- Your custom button -->
+<button id="my-feedback-btn">${customButtonText}</button>
+
+<script
+  src="${baseUrl}/widget.js"
+  data-project="${selected.slug}"
+  data-page="${embedPage}"
+  data-mode="popup"
+  data-trigger="#my-feedback-btn"
+  data-color="${selected.primaryColor}"
+></script>`}
+              </pre>
+              <button
+                onClick={() => copyToClipboard(`<button id="my-feedback-btn">${customButtonText}</button>\n<script src="${baseUrl}/widget.js" data-project="${selected.slug}" data-page="${embedPage}" data-mode="popup" data-trigger="#my-feedback-btn" data-color="${selected.primaryColor}"></script>`, "custom-btn")}
+                className="absolute top-2 right-2 p-1.5 rounded-md bg-surface border border-border hover:bg-muted transition-colors"
+              >
+                {copied === "custom-btn" ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Method 4: Inline Widget */}
+          <div className="p-4 rounded-xl border border-border bg-background">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 text-sm font-bold shrink-0">4</div>
               <div>
                 <h3 className="text-sm font-semibold">Inline Widget (Script tag)</h3>
                 <p className="text-xs text-muted-foreground">
@@ -487,10 +641,10 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Method 4: Direct Link / Reverse Proxy */}
+          {/* Method 5: Direct Link / Reverse Proxy */}
           <div className="p-4 rounded-xl border border-border bg-background">
             <div className="flex items-start gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400 text-sm font-bold shrink-0">4</div>
+              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400 text-sm font-bold shrink-0">5</div>
               <div>
                 <h3 className="text-sm font-semibold">Direct Link / Reverse Proxy</h3>
                 <p className="text-xs text-muted-foreground">

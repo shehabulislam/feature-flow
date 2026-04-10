@@ -1,6 +1,23 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isSuperAdmin } from "@/lib/superadmin";
 import { NextRequest } from "next/server";
+
+async function verifyOwnership(session: any, id: string) {
+  const item = await prisma.roadmapItem.findUnique({
+    where: { id },
+    include: { project: true },
+  });
+
+  if (!item) return null;
+
+  const isAdmin = isSuperAdmin(session?.user?.email);
+  if (!isAdmin && item.project.ownerId !== session.user.id) {
+    return null;
+  }
+
+  return item;
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -12,12 +29,9 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const item = await prisma.roadmapItem.findUnique({
-    where: { id },
-    include: { project: true },
-  });
+  const item = await verifyOwnership(session, id);
 
-  if (!item || item.project.ownerId !== session.user.id) {
+  if (!item) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -42,6 +56,46 @@ export async function PATCH(
   return Response.json({ roadmapItem: updated });
 }
 
+// Bulk reorder
+export async function PUT(
+  request: NextRequest,
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const { items } = body; // Array of { id, position, status }
+
+  if (!Array.isArray(items)) {
+    return Response.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  // Verify all items belong to a project the user owns
+  for (const item of items) {
+    const dbItem = await verifyOwnership(session, item.id);
+    if (!dbItem) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
+  // Update positions
+  await Promise.all(
+    items.map((item: { id: string; position: number; status?: string }) =>
+      prisma.roadmapItem.update({
+        where: { id: item.id },
+        data: {
+          position: item.position,
+          ...(item.status && { status: item.status }),
+        },
+      })
+    )
+  );
+
+  return Response.json({ success: true });
+}
+
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -52,12 +106,9 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const item = await prisma.roadmapItem.findUnique({
-    where: { id },
-    include: { project: true },
-  });
+  const item = await verifyOwnership(session, id);
 
-  if (!item || item.project.ownerId !== session.user.id) {
+  if (!item) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 

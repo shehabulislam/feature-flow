@@ -12,6 +12,7 @@
   var color = script.getAttribute('data-color') || '#6366f1';
   var position = script.getAttribute('data-position') || 'bottom-right';
   var page = script.getAttribute('data-page') || 'feedback';
+  var triggerSelector = script.getAttribute('data-trigger') || '';
   var baseUrl = script.src.replace('/widget.js', '');
   var pageUrl = baseUrl + '/p/' + project + '/' + page;
 
@@ -25,40 +26,11 @@
   var closeIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
 
   if (mode === 'popup') {
-    // Create floating button
-    var btn = document.createElement('button');
-    btn.id = 'featureflow-trigger';
-    btn.innerHTML = icons[page] || icons.feedback;
-    btn.setAttribute('aria-label', 'Open ' + page);
-
-    var posStyle = '';
-    if (position.indexOf('right') >= 0) posStyle += 'right:20px;';
-    else posStyle += 'left:20px;';
-    if (position.indexOf('top') >= 0) posStyle += 'top:20px;';
-    else posStyle += 'bottom:20px;';
-
-    btn.style.cssText = 'position:fixed;' + posStyle + 'z-index:99999;width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.15);transition:transform 0.2s ease,box-shadow 0.2s ease;background:' + color + ';';
-
-    btn.onmouseenter = function() {
-      btn.style.transform = 'scale(1.1)';
-      btn.style.boxShadow = '0 6px 30px rgba(0,0,0,0.2)';
-    };
-    btn.onmouseleave = function() {
-      btn.style.transform = 'scale(1)';
-      btn.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
-    };
-
     // Create popup container
     var popup = document.createElement('div');
     popup.id = 'featureflow-popup';
 
-    var popupPos = '';
-    if (position.indexOf('right') >= 0) popupPos += 'right:20px;';
-    else popupPos += 'left:20px;';
-    if (position.indexOf('top') >= 0) popupPos += 'top:85px;';
-    else popupPos += 'bottom:85px;';
-
-    popup.style.cssText = 'position:fixed;' + popupPos + 'z-index:99998;width:420px;height:600px;max-width:calc(100vw - 40px);max-height:calc(100vh - 120px);border-radius:16px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.2);display:none;opacity:0;transform:translateY(10px) scale(0.95);transition:opacity 0.3s ease,transform 0.3s ease;background:#fff;';
+    popup.style.cssText = 'position:fixed;z-index:99998;width:420px;height:600px;max-width:calc(100vw - 40px);max-height:calc(100vh - 120px);border-radius:16px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.2);display:none;opacity:0;transform:translateY(10px) scale(0.95);transition:opacity 0.3s ease,transform 0.3s ease;background:#fff;';
 
     // Header bar inside popup
     var header = document.createElement('div');
@@ -101,31 +73,118 @@
     popup.appendChild(iframe);
 
     var isOpen = false;
-    btn.onclick = function() {
+
+    function positionPopup(anchorEl) {
+      if (anchorEl && triggerSelector) {
+        // Position near the trigger element
+        var rect = anchorEl.getBoundingClientRect();
+        var spaceBelow = window.innerHeight - rect.bottom;
+        var spaceAbove = rect.top;
+        
+        if (spaceBelow > 300) {
+          popup.style.top = (rect.bottom + 8) + 'px';
+          popup.style.bottom = 'auto';
+        } else {
+          popup.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+          popup.style.top = 'auto';
+        }
+        
+        if (rect.left + 420 > window.innerWidth) {
+          popup.style.right = '20px';
+          popup.style.left = 'auto';
+        } else {
+          popup.style.left = rect.left + 'px';
+          popup.style.right = 'auto';
+        }
+      } else {
+        // Default positioning based on position attribute
+        var popupPos = '';
+        if (position.indexOf('right') >= 0) popupPos += 'right:20px;left:auto;';
+        else popupPos += 'left:20px;right:auto;';
+        if (position.indexOf('top') >= 0) popupPos += 'top:85px;bottom:auto;';
+        else popupPos += 'bottom:85px;top:auto;';
+        popup.style.cssText += popupPos;
+      }
+    }
+
+    function togglePopup(anchorEl) {
       isOpen = !isOpen;
       if (isOpen) {
+        positionPopup(anchorEl);
         popup.style.display = 'block';
         setTimeout(function() {
           popup.style.opacity = '1';
           popup.style.transform = 'translateY(0) scale(1)';
         }, 10);
-        btn.innerHTML = closeIcon;
+        if (btn) btn.innerHTML = closeIcon;
       } else {
         popup.style.opacity = '0';
         popup.style.transform = 'translateY(10px) scale(0.95)';
         setTimeout(function() { popup.style.display = 'none'; }, 300);
-        btn.innerHTML = icons[page] || icons.feedback;
+        if (btn) btn.innerHTML = icons[page] || icons.feedback;
       }
-    };
+    }
+
+    var btn = null;
+
+    if (triggerSelector) {
+      // Custom trigger mode: attach to user's button
+      var customTrigger = document.querySelector(triggerSelector);
+      if (customTrigger) {
+        customTrigger.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          togglePopup(customTrigger);
+        });
+      }
+    } else {
+      // Default floating button
+      btn = document.createElement('button');
+      btn.id = 'featureflow-trigger';
+      btn.innerHTML = icons[page] || icons.feedback;
+      btn.setAttribute('aria-label', 'Open ' + page);
+
+      var posStyle = '';
+      if (position.indexOf('right') >= 0) posStyle += 'right:20px;';
+      else posStyle += 'left:20px;';
+      if (position.indexOf('top') >= 0) posStyle += 'top:20px;';
+      else posStyle += 'bottom:20px;';
+
+      btn.style.cssText = 'position:fixed;' + posStyle + 'z-index:99999;width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.15);transition:transform 0.2s ease,box-shadow 0.2s ease;background:' + color + ';';
+
+      btn.onmouseenter = function() {
+        btn.style.transform = 'scale(1.1)';
+        btn.style.boxShadow = '0 6px 30px rgba(0,0,0,0.2)';
+      };
+      btn.onmouseleave = function() {
+        btn.style.transform = 'scale(1)';
+        btn.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+      };
+
+      btn.onclick = function() {
+        togglePopup(btn);
+      };
+
+      document.body.appendChild(btn);
+    }
 
     // Close on Escape
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape' && isOpen) {
-        btn.click();
+        togglePopup(null);
       }
     });
 
-    document.body.appendChild(btn);
+    // Close when clicking outside
+    document.addEventListener('click', function(e) {
+      if (isOpen && !popup.contains(e.target) && e.target !== btn) {
+        var customTrigger = triggerSelector ? document.querySelector(triggerSelector) : null;
+        if (!customTrigger || !customTrigger.contains(e.target)) {
+          togglePopup(null);
+        }
+      }
+    });
+
     document.body.appendChild(popup);
   } else {
     // Inline mode - find target div or create iframe
