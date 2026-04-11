@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { NextRequest } from "next/server";
 import { hash } from "bcryptjs";
+import crypto from "crypto";
 import { fireWebhooks } from "@/lib/webhooks";
 
 export async function GET(
@@ -92,7 +93,7 @@ export async function POST(
   }
 
   let userId = session?.user?.id || null;
-  let customerToken: string | null = null;
+  let autoLoginToken: string | null = null;
 
   // Auto-create customer account if not logged in
   if (!userId && authorEmail) {
@@ -101,7 +102,7 @@ export async function POST(
     });
 
     if (!existingUser) {
-      // Create a customer account with a random password (they can reset later)
+      // Create a customer account with a random password (they can use magic link to login)
       const randomPassword = Math.random().toString(36).slice(-12) + "Aa1!";
       const hashedPassword = await hash(randomPassword, 12);
 
@@ -116,8 +117,15 @@ export async function POST(
     }
 
     userId = existingUser.id;
-    // Return a flag so the frontend can auto-sign-in this user
-    customerToken = existingUser.email;
+
+    // Generate a one-time login token for auto sign-in
+    const loginToken = crypto.randomBytes(32).toString("hex");
+    const loginTokenExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    await prisma.user.update({
+      where: { id: existingUser.id },
+      data: { loginToken, loginTokenExpiry },
+    });
+    autoLoginToken = loginToken;
   }
 
   const boardId = boardSlug
@@ -157,8 +165,8 @@ export async function POST(
 
   return Response.json({
     feedback,
-    autoSignIn: customerToken ? true : false,
-    customerEmail: customerToken,
+    autoSignIn: !!autoLoginToken,
+    loginToken: autoLoginToken,
   }, { status: 201 });
 }
 

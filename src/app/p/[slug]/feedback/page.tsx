@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import {
   ChevronUp,
   MessageSquare,
@@ -42,6 +42,7 @@ interface Comment {
 export default function PublicFeedbackPage() {
   const params = useParams();
   const slug = params.slug as string;
+  const { data: session, update: updateSession } = useSession();
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState("most_voted");
@@ -64,15 +65,32 @@ export default function PublicFeedbackPage() {
   const [nameRequired, setNameRequired] = useState(true);
   const [emailRequired, setEmailRequired] = useState(true);
 
-  // Restore saved user info from localStorage
+  // Auto-fill from session when user is logged in
+  const isLoggedIn = !!session?.user;
   useEffect(() => {
-    const saved = localStorage.getItem("featureflow-user");
-    if (saved) {
-      try {
-        const { name, email } = JSON.parse(saved);
-        if (name) { setFormName(name); setCommentName(name); }
-        if (email) { setFormEmail(email); setCommentEmail(email); }
-      } catch { /* ignore */ }
+    if (session?.user) {
+      if (session.user.name) {
+        setFormName(session.user.name);
+        setCommentName(session.user.name);
+      }
+      if (session.user.email) {
+        setFormEmail(session.user.email);
+        setCommentEmail(session.user.email);
+      }
+    }
+  }, [session]);
+
+  // Restore saved user info from localStorage (only if not logged in)
+  useEffect(() => {
+    if (!session?.user) {
+      const saved = localStorage.getItem("featureflow-user");
+      if (saved) {
+        try {
+          const { name, email } = JSON.parse(saved);
+          if (name) { setFormName(name); setCommentName(name); }
+          if (email) { setFormEmail(email); setCommentEmail(email); }
+        } catch { /* ignore */ }
+      }
     }
     // Fetch project config
     fetch(`/api/projects/${slug}/config`)
@@ -84,7 +102,7 @@ export default function PublicFeedbackPage() {
         }
       })
       .catch(() => { /* ignore */ });
-  }, [slug]);
+  }, [slug, session]);
 
   const fetchFeedbacks = useCallback(async () => {
     setLoading(true);
@@ -177,13 +195,14 @@ export default function PublicFeedbackPage() {
         setFormDesc("");
         fetchFeedbacks();
 
-        // Auto sign-in the created customer account
-        if (data.autoSignIn && data.customerEmail) {
-          // Silently sign in - this sets the session cookie
-          await signIn("credentials", {
-            email: data.customerEmail,
+        // Auto sign-in the created customer account using login token
+        if (data.autoSignIn && data.loginToken) {
+          await signIn("login-token", {
+            token: data.loginToken,
             redirect: false,
           }).catch(() => { /* silent fail is ok */ });
+          // Refresh session so UI updates
+          await updateSession();
         }
       } else {
         toast.error(data.error || "Failed to submit");
@@ -437,7 +456,8 @@ export default function PublicFeedbackPage() {
                       value={commentName}
                       onChange={(e) => setCommentName(e.target.value)}
                       placeholder={nameRequired ? "Your name *" : "Your name"}
-                      className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      disabled={isLoggedIn && !!session?.user?.name}
+                      className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
                     />
                     )}
                     {(emailRequired || commentEmail) && (
@@ -446,7 +466,8 @@ export default function PublicFeedbackPage() {
                       value={commentEmail}
                       onChange={(e) => setCommentEmail(e.target.value)}
                       placeholder={emailRequired ? "Your email *" : "Your email"}
-                      className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      disabled={isLoggedIn && !!session?.user?.email}
+                      className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
                     />
                     )}
                   </div>
@@ -494,7 +515,8 @@ export default function PublicFeedbackPage() {
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
                     placeholder="Jane Doe"
-                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    disabled={isLoggedIn && !!session?.user?.name}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
                 )}
@@ -506,7 +528,8 @@ export default function PublicFeedbackPage() {
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value)}
                     placeholder="jane@example.com"
-                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    disabled={isLoggedIn && !!session?.user?.email}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
                 )}

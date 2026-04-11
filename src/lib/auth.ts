@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma";
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Credentials({
+      id: "credentials",
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
@@ -28,6 +29,41 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         );
 
         if (!isPasswordValid) return null;
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          plan: user.plan,
+          image: user.avatarUrl,
+        };
+      },
+    }),
+    // Token-based login (magic link / auto-login for customers)
+    Credentials({
+      id: "login-token",
+      name: "login-token",
+      credentials: {
+        token: { label: "Token", type: "text" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.token) return null;
+
+        const user = await prisma.user.findFirst({
+          where: {
+            loginToken: credentials.token as string,
+            loginTokenExpiry: { gt: new Date() },
+          },
+        });
+
+        if (!user) return null;
+
+        // Clear the token after use (one-time use)
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { loginToken: null, loginTokenExpiry: null },
+        });
 
         return {
           id: user.id,

@@ -2,8 +2,9 @@ import { hash } from "bcryptjs";
 import prisma from "@/lib/prisma";
 import { NextRequest } from "next/server";
 import crypto from "crypto";
+import { sendPasswordResetEmail } from "@/lib/email";
 
-// POST: Request password reset (generates token)
+// POST: Request password reset (generates token + sends email)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       // Don't reveal if email exists
-      return Response.json({ message: "If an account exists, a reset link has been sent." });
+      return Response.json({ message: "If an account exists, a password reset link has been sent." });
     }
 
     const resetToken = crypto.randomBytes(32).toString("hex");
@@ -27,12 +28,22 @@ export async function POST(request: NextRequest) {
       data: { resetToken, resetTokenExpiry },
     });
 
-    // In production, send email. For now, return the token in response
-    // so the owner can use it directly
+    // Get the base URL from the request
+    const baseUrl = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+
+    // Send reset email via SMTP
+    const emailResult = await sendPasswordResetEmail(email, resetToken, baseUrl);
+
+    if (!emailResult.success) {
+      console.error("Failed to send reset email:", emailResult.error);
+      return Response.json(
+        { error: "Failed to send reset email. SMTP may not be configured." },
+        { status: 500 }
+      );
+    }
+
     return Response.json({
-      message: "If an account exists, a reset link has been sent.",
-      // Include reset link for development/self-hosted usage
-      resetLink: `/login?reset=${resetToken}`,
+      message: "If an account exists, a password reset link has been sent to their email.",
     });
   } catch (error) {
     console.error("Reset password error:", error);

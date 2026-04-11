@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Users,
   FolderOpen,
@@ -259,14 +260,23 @@ export default function AdminPage() {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center">
-          <Shield className="w-5 h-5 text-white" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center">
+            <Shield className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold">Super Admin</h1>
+            <p className="text-muted-foreground text-sm">Manage all users, projects, and platform data</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-3xl font-bold">Super Admin</h1>
-          <p className="text-muted-foreground text-sm">Manage all users, projects, and platform data</p>
-        </div>
+        <Link
+          href="/dashboard/admin/smtp"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-surface hover:bg-muted/50 text-sm font-medium transition-colors"
+        >
+          <Mail className="w-4 h-4" />
+          SMTP Settings
+        </Link>
       </div>
 
       {/* Tabs */}

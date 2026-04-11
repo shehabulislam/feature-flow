@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Zap, Eye, EyeOff, Loader2, KeyRound } from "lucide-react";
+import { Zap, Eye, EyeOff, Loader2, KeyRound, Mail } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function LoginPage() {
@@ -23,6 +23,8 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resetToken = searchParams.get("reset");
+  const loginToken = searchParams.get("loginToken");
+  const errorParam = searchParams.get("error");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -33,13 +35,66 @@ function LoginContent() {
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
-  const [resetLink, setResetLink] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
+
+  // Magic link login states
+  const [showMagicLink, setShowMagicLink] = useState(false);
+  const [magicEmail, setMagicEmail] = useState("");
+  const [magicLoading, setMagicLoading] = useState(false);
+  const [magicSent, setMagicSent] = useState(false);
 
   // Reset password states (when ?reset=token is in URL)
   const [showReset, setShowReset] = useState(!!resetToken);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+
+  // Auto-login via token from email link
+  const [autoLoginProcessing, setAutoLoginProcessing] = useState(false);
+
+  // Show error from URL params
+  useEffect(() => {
+    if (errorParam === "invalid-token") {
+      toast.error("Login link is invalid or expired");
+    } else if (errorParam === "missing-token") {
+      toast.error("Login link is missing");
+    }
+  }, [errorParam]);
+
+  // Auto-login when loginToken is in URL
+  useEffect(() => {
+    if (loginToken && !autoLoginProcessing) {
+      setAutoLoginProcessing(true);
+      signIn("login-token", {
+        token: loginToken,
+        redirect: false,
+      }).then((result) => {
+        if (result?.error) {
+          toast.error("Login link is invalid or expired");
+          router.replace("/login");
+        } else {
+          toast.success("Welcome back!");
+          router.push("/dashboard");
+          router.refresh();
+        }
+      }).catch(() => {
+        toast.error("Something went wrong");
+        router.replace("/login");
+      });
+    }
+  }, [loginToken, autoLoginProcessing, router]);
+
+  // If processing auto-login, show loading
+  if (autoLoginProcessing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Signing you in...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Restore remembered email
   useEffect(() => {
@@ -97,14 +152,40 @@ function LoginContent() {
         body: JSON.stringify({ email: forgotEmail }),
       });
       const data = await res.json();
-      if (data.resetLink) {
-        setResetLink(data.resetLink);
+      if (res.ok) {
+        setForgotSent(true);
+        toast.success("If an account exists, a reset link has been sent to the email.");
+      } else {
+        toast.error(data.error || "Failed to send reset email. Check SMTP settings.");
       }
-      toast.success("If an account exists, you can now reset your password.");
     } catch {
       toast.error("Something went wrong");
     } finally {
       setForgotLoading(false);
+    }
+  };
+
+  const handleMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!magicEmail) return;
+    setMagicLoading(true);
+    try {
+      const res = await fetch("/api/auth/magic-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: magicEmail }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMagicSent(true);
+        toast.success("If an account exists, a login link has been sent.");
+      } else {
+        toast.error(data.error || "Failed to send login email. Check SMTP settings.");
+      }
+    } catch {
+      toast.error("Something went wrong");
+    } finally {
+      setMagicLoading(false);
     }
   };
 
@@ -164,7 +245,12 @@ function LoginContent() {
           ) : showForgot ? (
             <>
               <h1 className="text-2xl font-bold mb-2">Forgot password?</h1>
-              <p className="text-muted-foreground">Enter your email to get a reset link</p>
+              <p className="text-muted-foreground">We&apos;ll send a reset link to your email</p>
+            </>
+          ) : showMagicLink ? (
+            <>
+              <h1 className="text-2xl font-bold mb-2">Sign in with email</h1>
+              <p className="text-muted-foreground">We&apos;ll send a login link to your email</p>
             </>
           ) : (
             <>
@@ -224,50 +310,88 @@ function LoginContent() {
         {showForgot && !showReset && (
           <form onSubmit={handleForgotPassword} className="p-8 rounded-2xl border border-border bg-surface shadow-xl shadow-black/5">
             <div className="space-y-5">
-              <div>
-                <label htmlFor="forgotEmail" className="block text-sm font-medium mb-2">
-                  Email address
-                </label>
-                <input
-                  id="forgotEmail"
-                  type="email"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  required
-                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-                />
-              </div>
-
-              {resetLink && (
-                <div className="p-4 rounded-xl bg-success/10 border border-success/20">
-                  <p className="text-sm font-medium text-success mb-2">Reset link generated:</p>
-                  <a
-                    href={resetLink}
-                    className="text-sm text-primary underline break-all font-mono"
-                  >
-                    {typeof window !== "undefined" ? window.location.origin : ""}{resetLink}
-                  </a>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Share this link with the user. It expires in 1 hour.
+              {forgotSent ? (
+                <div className="p-5 rounded-xl bg-success/10 border border-success/20 text-center">
+                  <Mail className="w-10 h-10 text-success mx-auto mb-3" />
+                  <h3 className="font-semibold text-lg mb-2">Check your email</h3>
+                  <p className="text-sm text-muted-foreground">
+                    If an account exists for <span className="font-medium text-foreground">{forgotEmail}</span>, we&apos;ve sent a password reset link.
                   </p>
                 </div>
+              ) : (
+                <>
+                  <div>
+                    <label htmlFor="forgotEmail" className="block text-sm font-medium mb-2">
+                      Email address
+                    </label>
+                    <input
+                      id="forgotEmail"
+                      type="email"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      required
+                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {forgotLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {forgotLoading ? "Sending..." : "Send Reset Link"}
+                  </button>
+                </>
               )}
+            </div>
+          </form>
+        )}
 
-              <button
-                type="submit"
-                disabled={forgotLoading}
-                className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2"
-              >
-                {forgotLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {forgotLoading ? "Sending..." : "Get Reset Link"}
-              </button>
+        {/* Magic Link Form */}
+        {showMagicLink && !showReset && !showForgot && (
+          <form onSubmit={handleMagicLink} className="p-8 rounded-2xl border border-border bg-surface shadow-xl shadow-black/5">
+            <div className="space-y-5">
+              {magicSent ? (
+                <div className="p-5 rounded-xl bg-success/10 border border-success/20 text-center">
+                  <Mail className="w-10 h-10 text-success mx-auto mb-3" />
+                  <h3 className="font-semibold text-lg mb-2">Check your email</h3>
+                  <p className="text-sm text-muted-foreground">
+                    If an account exists for <span className="font-medium text-foreground">{magicEmail}</span>, we&apos;ve sent a login link. It expires in 15 minutes.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label htmlFor="magicEmail" className="block text-sm font-medium mb-2">
+                      Email address
+                    </label>
+                    <input
+                      id="magicEmail"
+                      type="email"
+                      value={magicEmail}
+                      onChange={(e) => setMagicEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      required
+                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={magicLoading}
+                    className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-primary/25 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {magicLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {magicLoading ? "Sending..." : "Send Login Link"}
+                  </button>
+                </>
+              )}
             </div>
           </form>
         )}
 
         {/* Login Form */}
-        {!showForgot && !showReset && (
+        {!showForgot && !showReset && !showMagicLink && (
           <form onSubmit={handleSubmit} className="p-8 rounded-2xl border border-border bg-surface shadow-xl shadow-black/5">
             <div className="space-y-5">
               <div>
@@ -322,7 +446,7 @@ function LoginContent() {
                 </label>
                 <button
                   type="button"
-                  onClick={() => { setShowForgot(true); setForgotEmail(email); }}
+                  onClick={() => { setShowForgot(true); setForgotEmail(email); setForgotSent(false); }}
                   className="text-sm text-primary hover:text-primary-hover font-medium transition-colors flex items-center gap-1"
                 >
                   <KeyRound className="w-3.5 h-3.5" />
@@ -338,6 +462,25 @@ function LoginContent() {
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                 {loading ? "Signing in..." : "Sign in"}
               </button>
+
+              {/* Magic link option */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-2 bg-surface text-muted-foreground">or</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => { setShowMagicLink(true); setMagicEmail(email); setMagicSent(false); }}
+                className="w-full py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted/50 transition-colors flex items-center justify-center gap-2"
+              >
+                <Mail className="w-4 h-4" />
+                Sign in with email link
+              </button>
             </div>
           </form>
         )}
@@ -345,7 +488,16 @@ function LoginContent() {
         {showForgot && !showReset ? (
           <p className="text-center text-sm text-muted-foreground mt-6">
             <button
-              onClick={() => { setShowForgot(false); setResetLink(""); }}
+              onClick={() => { setShowForgot(false); setForgotSent(false); }}
+              className="text-primary hover:text-primary-hover font-medium transition-colors"
+            >
+              ← Back to sign in
+            </button>
+          </p>
+        ) : showMagicLink && !showReset ? (
+          <p className="text-center text-sm text-muted-foreground mt-6">
+            <button
+              onClick={() => { setShowMagicLink(false); setMagicSent(false); }}
               className="text-primary hover:text-primary-hover font-medium transition-colors"
             >
               ← Back to sign in

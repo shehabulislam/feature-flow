@@ -16,6 +16,8 @@ model User {
   plan              String    @default("free") // "free" | "pro" | "team"
   resetToken        String?   @unique
   resetTokenExpiry  DateTime?
+  loginToken        String?   @unique
+  loginTokenExpiry  DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -181,4 +183,16 @@ model Webhook {
   updatedAt     DateTime  @updatedAt
 
   project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model SmtpSettings {
+  id          String  @id @default("singleton")
+  host        String
+  port        Int     @default(587)
+  secure      Boolean @default(false)
+  user        String
+  pass        String
+  fromEmail   String
+  fromName    String  @default("FeatureFlow")
+  updatedAt   DateTime @updatedAt
 }

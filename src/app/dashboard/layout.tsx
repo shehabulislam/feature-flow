@@ -13,5 +13,10 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  // Customers don't have dashboard access - redirect them back
+  if ((session.user as any).role === "customer") {
+    redirect("/");
+  }
+
   return <DashboardShell user={session.user}>{children}</DashboardShell>;
 }
