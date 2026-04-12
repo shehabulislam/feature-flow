@@ -116,6 +116,8 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -135,6 +137,8 @@ export default function AdminPage() {
       const params = new URLSearchParams();
       params.set("tab", tab);
       if (search) params.set("search", search);
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
       if (tab !== "overview") params.set("page", page.toString());
 
       const res = await fetch(`/api/admin?${params}`);
@@ -159,7 +163,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [tab, search, page, router]);
+  }, [tab, search, dateFrom, dateTo, page, router]);
 
   useEffect(() => {
     fetchData();
@@ -284,7 +288,7 @@ export default function AdminPage() {
         {tabs.map((t) => (
           <button
             key={t.key}
-            onClick={() => { setTab(t.key); setPage(1); }}
+            onClick={() => { setTab(t.key); setPage(1); setDateFrom(""); setDateTo(""); setSearchInput(""); setSearch(""); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               tab === t.key
                 ? "bg-surface text-foreground shadow-sm"
@@ -299,8 +303,8 @@ export default function AdminPage() {
 
       {/* Search bar & Export (for users and projects) */}
       {tab !== "overview" && (
-        <div className="flex items-center gap-3 max-w-xl">
-          <div className="relative flex-1">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
@@ -309,6 +313,33 @@ export default function AdminPage() {
               placeholder={tab === "users" ? "Search by name or email..." : "Search by name or slug..."}
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-surface text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
+          </div>
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+              className="px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              title="From date"
+            />
+            <span className="text-xs text-muted-foreground">to</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+              className="px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              title="To date"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(""); setDateTo(""); setPage(1); }}
+                className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                title="Clear date filter"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
           <button
             onClick={exportToCsv}

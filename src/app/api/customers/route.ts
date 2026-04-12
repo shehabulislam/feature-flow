@@ -11,6 +11,11 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const projectSlug = searchParams.get("project");
   const search = searchParams.get("search") || "";
+  const dateFrom = searchParams.get("dateFrom");
+  const dateTo = searchParams.get("dateTo");
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = 20;
+  const skip = (page - 1) * limit;
 
   // Get all projects owned by this user
   const projects = await prisma.project.findMany({
@@ -78,30 +83,48 @@ export async function GET(request: NextRequest) {
     ];
   }
 
-  const customers = await prisma.user.findMany({
-    where: whereClause,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      createdAt: true,
-      _count: {
-        select: {
-          feedbacks: {
-            where: { projectId: { in: projectIds } },
-          },
-          comments: {
-            where: {
-              feedback: { projectId: { in: projectIds } },
+  if (dateFrom || dateTo) {
+    whereClause.createdAt = {
+      ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+      ...(dateTo ? { lte: new Date(dateTo + "T23:59:59.999Z") } : {}),
+    };
+  }
+
+  const [customers, total] = await Promise.all([
+    prisma.user.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        _count: {
+          select: {
+            feedbacks: {
+              where: { projectId: { in: projectIds } },
             },
+            comments: {
+              where: {
+                feedback: { projectId: { in: projectIds } },
+              },
+            },
+            upvotes: true,
           },
-          upvotes: true,
         },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.user.count({ where: whereClause }),
+  ]);
 
-  return Response.json({ customers, projects });
+  return Response.json({
+    customers,
+    projects,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+  });
 }

@@ -61,6 +61,7 @@ export default function PublicFeedbackPage() {
   const [newComment, setNewComment] = useState("");
   const [commentName, setCommentName] = useState("");
   const [commentEmail, setCommentEmail] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
   const [upvotedIds, setUpvotedIds] = useState<Set<string>>(new Set());
   const [nameRequired, setNameRequired] = useState(true);
   const [emailRequired, setEmailRequired] = useState(true);
@@ -227,6 +228,7 @@ export default function PublicFeedbackPage() {
       toast.error("Please enter your email");
       return;
     }
+    setSubmittingComment(true);
     try {
       const res = await fetch(`/api/feedback/${selectedId}/comments`, {
         method: "POST",
@@ -246,13 +248,13 @@ export default function PublicFeedbackPage() {
       }
     } catch {
       toast.error("Failed to post comment");
+    } finally {
+      setSubmittingComment(false);
     }
   };
 
-  const selectedFeedback = feedbacks.find((fb) => fb.id === selectedId);
-
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-3xl mx-auto px-6 py-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
@@ -310,7 +312,7 @@ export default function PublicFeedbackPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex items-center justify-center py-20">
+        <div className="flex items-center justify-center py-20 mb-20">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
         </div>
       ) : feedbacks.length === 0 ? (
@@ -329,19 +331,18 @@ export default function PublicFeedbackPage() {
           </button>
         </div>
       ) : (
-        <div className="grid lg:grid-cols-[1fr,360px] gap-6">
-          <div className="space-y-3">
-            {feedbacks.map((fb) => (
+        <div className="space-y-3">
+          {feedbacks.map((fb) => (
+            <div key={fb.id}>
+              {/* Feedback card */}
               <div
-                key={fb.id}
                 onClick={() => selectFeedback(fb.id)}
                 className={`
                   flex items-start gap-4 p-4 rounded-xl border cursor-pointer
                   transition-all duration-200
-                  ${
-                    selectedId === fb.id
-                      ? "border-primary bg-primary/5 shadow-md"
-                      : "border-border bg-surface hover:border-primary/30"
+                  ${selectedId === fb.id
+                    ? "border-primary bg-primary/5 shadow-md rounded-b-none"
+                    : "border-border bg-surface hover:border-primary/30"
                   }
                 `}
               >
@@ -354,10 +355,9 @@ export default function PublicFeedbackPage() {
                   className={`
                     flex flex-col items-center px-2 py-1.5 rounded-xl min-w-[48px]
                     transition-all duration-200
-                    ${
-                      upvotedIds.has(fb.id)
-                        ? "bg-primary text-white shadow-lg shadow-primary/25"
-                        : "bg-muted hover:bg-primary-light hover:text-primary-dark"
+                    ${upvotedIds.has(fb.id)
+                      ? "bg-primary text-white shadow-lg shadow-primary/25"
+                      : "bg-muted hover:bg-primary-light hover:text-primary-dark"
                     }
                   `}
                 >
@@ -388,110 +388,96 @@ export default function PublicFeedbackPage() {
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
 
-          {/* Detail / Comments */}
-          {selectedFeedback && (
-            <div className="sticky top-24 self-start space-y-4 animate-slide-down">
-              <div className="p-5 rounded-2xl border border-border bg-surface">
-                <h3 className="font-bold mb-2">{selectedFeedback.title}</h3>
-                <div className="flex items-center gap-2 mb-3">
-                  <StatusBadge status={selectedFeedback.status} />
-                  <CategoryBadge category={selectedFeedback.category} />
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {selectedFeedback.description}
-                </p>
-              </div>
-
-              {/* Comments */}
-              <div className="p-5 rounded-2xl border border-border bg-surface">
-                <h4 className="font-semibold text-sm mb-4">
-                  Comments ({comments.length})
-                </h4>
-                {loadingComments ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-primary mx-auto" />
-                ) : (
-                  <div className="space-y-3 mb-4">
-                    {comments.map((c) => (
-                      <div
-                        key={c.id}
-                        className={`p-3 rounded-xl text-sm ${
-                          c.isOfficial
+              {/* Inline comments section – shown directly below the selected feedback */}
+              {selectedId === fb.id && (
+                <div className="border border-t-0 border-primary rounded-b-xl bg-surface p-5 animate-slide-down">
+                  <h4 className="font-semibold text-sm mb-4">
+                    Comments ({comments.length})
+                  </h4>
+                  {loadingComments ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-primary mx-auto mb-10" />
+                  ) : (
+                    <div className="space-y-3 mb-4">
+                      {comments.map((c) => (
+                        <div
+                          key={c.id}
+                          className={`p-3 rounded-xl text-sm ${c.isOfficial
                             ? "bg-primary/5 border border-primary/20"
                             : "bg-muted"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-xs">
-                            {c.author?.name || c.authorName || "Anonymous"}
-                          </span>
-                          {c.isOfficial && (
-                            <span className="px-1.5 py-0.5 rounded-full bg-primary text-white text-[9px] font-bold">
-                              TEAM
+                            }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-xs">
+                              {c.author?.name || c.authorName || "Anonymous"}
                             </span>
-                          )}
-                          <span className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
-                          </span>
+                            {c.isOfficial && (
+                              <span className="px-1.5 py-0.5 rounded-full bg-primary text-white text-[9px] font-bold">
+                                TEAM
+                              </span>
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground">{c.content}</p>
                         </div>
-                        <p className="text-muted-foreground">{c.content}</p>
-                      </div>
-                    ))}
-                    {comments.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-4">
-                        No comments yet
-                      </p>
-                    )}
-                  </div>
-                )}
+                      ))}
+                      {comments.length === 0 && (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          No comments yet. Be the first to comment!
+                        </p>
+                      )}
+                    </div>
+                  )}
 
-                {/* Add comment - with optional name and email */}
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    {(nameRequired || commentName) && (
-                    <input
-                      type="text"
-                      value={commentName}
-                      onChange={(e) => setCommentName(e.target.value)}
-                      placeholder={nameRequired ? "Your name *" : "Your name"}
-                      disabled={isLoggedIn && !!session?.user?.name}
-                      className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
-                    />
-                    )}
-                    {(emailRequired || commentEmail) && (
-                    <input
-                      type="email"
-                      value={commentEmail}
-                      onChange={(e) => setCommentEmail(e.target.value)}
-                      placeholder={emailRequired ? "Your email *" : "Your email"}
-                      disabled={isLoggedIn && !!session?.user?.email}
-                      className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
-                    />
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && submitComment()}
-                      placeholder="Add a comment..."
-                      className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                    <button
-                      onClick={submitComment}
-                      disabled={!newComment || (nameRequired && !commentName) || (emailRequired && !commentEmail)}
-                      className="px-3 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white transition-colors disabled:opacity-40"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
+                  {/* Add comment */}
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <div className="flex gap-2">
+                      {(nameRequired || commentName) && (
+                        <input
+                          type="text"
+                          value={commentName}
+                          onChange={(e) => setCommentName(e.target.value)}
+                          placeholder={nameRequired ? "Your name *" : "Your name"}
+                          disabled={isLoggedIn && !!session?.user?.name}
+                          className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                      )}
+                      {(emailRequired || commentEmail) && (
+                        <input
+                          type="email"
+                          value={commentEmail}
+                          onChange={(e) => setCommentEmail(e.target.value)}
+                          placeholder={emailRequired ? "Your email *" : "Your email"}
+                          disabled={isLoggedIn && !!session?.user?.email}
+                          className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && !submittingComment && submitComment()}
+                        placeholder="Add a comment..."
+                        disabled={submittingComment}
+                        className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
+                      />
+                      <button
+                        onClick={submitComment}
+                        disabled={submittingComment || !newComment || (nameRequired && !commentName) || (emailRequired && !commentEmail)}
+                        className="px-3 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white transition-colors disabled:opacity-40"
+                      >
+                        {submittingComment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
       )}
 
@@ -508,30 +494,30 @@ export default function PublicFeedbackPage() {
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 {(nameRequired || formName) && (
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">Your name {nameRequired && <span className="text-danger">*</span>}</label>
-                  <input
-                    type="text"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="Jane Doe"
-                    disabled={isLoggedIn && !!session?.user?.name}
-                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Your name {nameRequired && <span className="text-danger">*</span>}</label>
+                    <input
+                      type="text"
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="Jane Doe"
+                      disabled={isLoggedIn && !!session?.user?.name}
+                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
+                    />
+                  </div>
                 )}
                 {(emailRequired || formEmail) && (
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">Email {emailRequired && <span className="text-danger">*</span>}</label>
-                  <input
-                    type="email"
-                    value={formEmail}
-                    onChange={(e) => setFormEmail(e.target.value)}
-                    placeholder="jane@example.com"
-                    disabled={isLoggedIn && !!session?.user?.email}
-                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Email {emailRequired && <span className="text-danger">*</span>}</label>
+                    <input
+                      type="email"
+                      value={formEmail}
+                      onChange={(e) => setFormEmail(e.target.value)}
+                      placeholder="jane@example.com"
+                      disabled={isLoggedIn && !!session?.user?.email}
+                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 disabled:cursor-not-allowed"
+                    />
+                  </div>
                 )}
               </div>
               <div>

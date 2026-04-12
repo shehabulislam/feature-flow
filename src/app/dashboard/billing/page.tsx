@@ -12,7 +12,7 @@ export default function BillingPage() {
   const { data: session } = useSession();
   const [currentPlan, setCurrentPlan] = useState<PlanType>("free");
   const [loading, setLoading] = useState(true);
-  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingLoading, setBillingLoading] = useState<string | null>(null);
 
   // If super admin, billing page should probably not be usable, or just hide pricing.
   const isSuper = isSuperAdmin(session?.user?.email);
@@ -31,7 +31,7 @@ export default function BillingPage() {
   }, []);
 
   const handleUpgrade = async (plan: string) => {
-    setBillingLoading(true);
+    setBillingLoading(plan);
     try {
       const res = await fetch("/api/billing", {
         method: "POST",
@@ -47,7 +47,7 @@ export default function BillingPage() {
     } catch {
       toast.error("Failed to start checkout");
     } finally {
-      setBillingLoading(false);
+      setBillingLoading(null);
     }
   };
 
@@ -158,10 +158,10 @@ export default function BillingPage() {
                   {!isCurrent && plan.key !== "free" && (
                     <button
                       onClick={() => handleUpgrade(plan.key)}
-                      disabled={billingLoading}
-                      className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold transition-all flex items-center justify-center gap-1.5 hover:shadow-lg hover:shadow-primary/25"
+                      disabled={!!billingLoading}
+                      className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold transition-all flex items-center justify-center gap-1.5 hover:shadow-lg hover:shadow-primary/25 disabled:opacity-60"
                     >
-                      {billingLoading ? (
+                      {billingLoading === plan.key ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
                         <>Upgrade <ArrowUpRight className="w-3.5 h-3.5" /></>

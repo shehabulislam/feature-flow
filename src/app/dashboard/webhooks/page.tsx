@@ -350,26 +350,24 @@ export default function WebhooksPage() {
           {webhooks.map((wh) => (
             <div
               key={wh.id}
-              className={`p-5 rounded-2xl border bg-surface transition-all ${
-                wh.enabled
+              className={`p-5 rounded-2xl border bg-surface transition-all ${wh.enabled
                   ? "border-border hover:border-primary/30"
                   : "border-border/50 opacity-60"
-              }`}
+                }`}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1.5">
                     <h3 className="text-sm font-bold truncate">{wh.name}</h3>
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        wh.method === "POST"
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${wh.method === "POST"
                           ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                           : wh.method === "PUT"
-                          ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                          : wh.method === "PATCH"
-                          ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-                          : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                      }`}
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                            : wh.method === "PATCH"
+                              ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                              : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                        }`}
                     >
                       {wh.method}
                     </span>
@@ -399,9 +397,8 @@ export default function WebhooksPage() {
                   {/* Toggle */}
                   <button
                     onClick={() => toggleEnabled(wh)}
-                    className={`p-2 rounded-lg hover:bg-muted transition-colors ${
-                      wh.enabled ? "text-success" : "text-muted-foreground"
-                    }`}
+                    className={`p-2 rounded-lg hover:bg-muted transition-colors ${wh.enabled ? "text-success" : "text-muted-foreground"
+                      }`}
                     title={wh.enabled ? "Disable" : "Enable"}
                   >
                     {wh.enabled ? (
@@ -615,14 +612,12 @@ export default function WebhooksPage() {
                   onClick={() =>
                     setForm({ ...form, enabled: !form.enabled })
                   }
-                  className={`relative w-11 h-6 rounded-full transition-colors ${
-                    form.enabled ? "bg-primary" : "bg-border"
-                  }`}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${form.enabled ? "bg-primary" : "bg-border"
+                    }`}
                 >
                   <div
-                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
-                      form.enabled ? "translate-x-5.5 left-0.5" : "left-0.5"
-                    }`}
+                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${form.enabled ? "left-0.5" : "left-0.5"
+                      }`}
                     style={{
                       transform: form.enabled
                         ? "translateX(22px)"

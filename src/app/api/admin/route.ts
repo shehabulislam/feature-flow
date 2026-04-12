@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const tab = searchParams.get("tab") || "users";
   const search = searchParams.get("search") || "";
+  const dateFrom = searchParams.get("dateFrom");
+  const dateTo = searchParams.get("dateTo");
   const page = parseInt(searchParams.get("page") || "1");
   const limit = 20;
   const skip = (page - 1) * limit;
@@ -57,14 +59,19 @@ export async function GET(request: NextRequest) {
   }
 
   if (tab === "users") {
-    const where = search
-      ? {
-          OR: [
-            { name: { contains: search } },
-            { email: { contains: search } },
-          ],
-        }
-      : {};
+    const where: Record<string, unknown> = {};
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { email: { contains: search } },
+      ];
+    }
+    if (dateFrom || dateTo) {
+      where.createdAt = {
+        ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+        ...(dateTo ? { lte: new Date(dateTo + "T23:59:59.999Z") } : {}),
+      };
+    }
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
@@ -101,14 +108,19 @@ export async function GET(request: NextRequest) {
   }
 
   if (tab === "projects") {
-    const where = search
-      ? {
-          OR: [
-            { name: { contains: search } },
-            { slug: { contains: search } },
-          ],
-        }
-      : {};
+    const where: Record<string, unknown> = {};
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { slug: { contains: search } },
+      ];
+    }
+    if (dateFrom || dateTo) {
+      where.createdAt = {
+        ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+        ...(dateTo ? { lte: new Date(dateTo + "T23:59:59.999Z") } : {}),
+      };
+    }
 
     const [projects, total] = await Promise.all([
       prisma.project.findMany({
