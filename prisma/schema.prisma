@@ -25,22 +25,25 @@ model User {
   feedbacks     Feedback[]
   upvotes       Upvote[]
   comments      Comment[]
-  subscription  Subscription?
+  entitlements  UserFsEntitlement[]
 }
 
-model Subscription {
-  id                 String    @id @default(cuid())
-  userId             String    @unique
-  stripeCustomerId   String?   @unique
-  stripeSubscriptionId String? @unique
-  stripePriceId      String?
-  status             String    @default("inactive") // active, canceled, past_due, inactive
-  currentPeriodEnd   DateTime?
-  cancelAtPeriodEnd  Boolean   @default(false)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+model UserFsEntitlement {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fsLicenseId String    @unique
+  fsPlanId    String
+  fsPricingId String
+  fsUserId    String
+  type        String    // 'subscription' | 'one-time'
+  expiration  DateTime?
+  isCanceled  Boolean
+  createdAt   DateTime
+
+  @@index([type])
+  @@map("user_fs_entitlement")
 }
 
 model Project {
@@ -94,6 +97,7 @@ model Feedback {
   status        String    @default("open") // open, under_review, planned, in_progress, completed, closed
   category      String    @default("feature") // feature, bug, improvement, question
   upvoteCount   Int       @default(0)
+  isHidden      Boolean   @default(false)
   authorName    String?   // For anonymous submissions
   authorEmail   String?   // For anonymous submissions
   createdAt     DateTime  @default(now())

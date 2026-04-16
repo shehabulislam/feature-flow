@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { MessageSquare, Filter, ChevronUp, Loader2, Search, Download } from "lucide-react";
+import { MessageSquare, Filter, ChevronUp, Loader2, Search, Download, EyeOff, Eye, Trash2 } from "lucide-react";
 import StatusBadge, { CategoryBadge } from "@/components/StatusBadge";
 import toast from "react-hot-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -15,6 +15,7 @@ interface Feedback {
   upvoteCount: number;
   authorName: string | null;
   createdAt: string;
+  isHidden?: boolean;
   author: { id: string; name: string | null; avatarUrl: string | null } | null;
   board: { name: string; slug: string } | null;
   _count: { comments: number; upvotes: number };
@@ -37,6 +38,8 @@ export default function FeedbackPage() {
   const [search, setSearch] = useState("");
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/projects")
@@ -98,6 +101,46 @@ export default function FeedbackPage() {
       toast.error("Failed to update status");
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  const hideFeedback = async (id: string, currentHidden: boolean) => {
+    try {
+      const res = await fetch(`/api/feedback/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isHidden: !currentHidden }),
+      });
+      if (res.ok) {
+        toast.success(!currentHidden ? "Feedback hidden from public" : "Feedback visible again");
+        fetchFeedbacks();
+        if (selectedFeedback?.id === id) {
+          setSelectedFeedback({ ...selectedFeedback, isHidden: !currentHidden });
+        }
+      }
+    } catch {
+      toast.error("Failed to update feedback");
+    }
+  };
+
+  const deleteFeedback = async (id: string) => {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/feedback/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Feedback deleted");
+        fetchFeedbacks();
+        if (selectedFeedback?.id === id) {
+          setSelectedFeedback(null);
+        }
+      } else {
+        toast.error("Failed to delete feedback");
+      }
+    } catch {
+      toast.error("Failed to delete feedback");
+    } finally {
+      setDeletingId(null);
+      setConfirmDelete(null);
     }
   };
 
@@ -234,20 +277,18 @@ export default function FeedbackPage() {
           )}
         </div>
       ) : (
-        <div className="grid lg:grid-cols-[1fr,380px] gap-6">
-          {/* List */}
-          <div className="space-y-3 stagger-children">
-            {filteredFeedbacks.map((fb) => (
+        <div className="space-y-3 stagger-children">
+          {filteredFeedbacks.map((fb) => (
+            <div key={fb.id}>
               <button
-                key={fb.id}
-                onClick={() => setSelectedFeedback(fb)}
+                onClick={() => setSelectedFeedback(selectedFeedback?.id === fb.id ? null : fb)}
                 className={`
-                  w-full text-left flex items-start gap-4 p-4 rounded-xl border
+                  w-full text-left flex items-start gap-4 p-4 border
                   transition-all duration-200
                   ${
                     selectedFeedback?.id === fb.id
-                      ? "border-primary bg-primary/5 shadow-md"
-                      : "border-border bg-surface hover:border-primary/30 hover:bg-surface-hover"
+                      ? "border-primary bg-primary/5 shadow-md rounded-t-xl rounded-b-none"
+                      : "border-border bg-surface hover:border-primary/30 hover:bg-surface-hover rounded-xl"
                   }
                 `}
               >
@@ -275,55 +316,108 @@ export default function FeedbackPage() {
                   </div>
                 </div>
               </button>
-            ))}
-          </div>
 
-          {/* Detail panel */}
-          {selectedFeedback && (
-            <div className="p-6 rounded-2xl border border-border bg-surface sticky top-6 self-start animate-slide-down">
-              <h3 className="text-lg font-bold mb-2">{selectedFeedback.title}</h3>
-              <div className="flex items-center gap-2 mb-4">
-                <StatusBadge status={selectedFeedback.status} />
-                <CategoryBadge category={selectedFeedback.category} />
-              </div>
-              <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                {selectedFeedback.description}
-              </p>
+              {/* Inline detail panel – appears directly below the clicked feedback */}
+              {selectedFeedback?.id === fb.id && (
+                <div className="p-6 rounded-b-xl border border-t-0 border-primary bg-surface animate-slide-down">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                      <h3 className="text-lg font-bold mb-2">{selectedFeedback.title}</h3>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={selectedFeedback.status} />
+                        <CategoryBadge category={selectedFeedback.category} />
+                        {selectedFeedback.isHidden && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 flex items-center gap-1">
+                            <EyeOff className="w-2.5 h-2.5" /> Hidden
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Moderate actions */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => hideFeedback(selectedFeedback.id, selectedFeedback.isHidden ?? false)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          selectedFeedback.isHidden
+                            ? "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300"
+                            : "bg-muted text-muted-foreground hover:text-foreground"
+                        }`}
+                        title={selectedFeedback.isHidden ? "Unhide feedback" : "Hide from public"}
+                      >
+                        {selectedFeedback.isHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                        {selectedFeedback.isHidden ? "Unhide" : "Hide"}
+                      </button>
+                      {confirmDelete === selectedFeedback.id ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-danger">Are you sure?</span>
+                          <button
+                            onClick={() => deleteFeedback(selectedFeedback.id)}
+                            disabled={deletingId === selectedFeedback.id}
+                            className="px-2 py-1 rounded-lg text-xs font-medium bg-danger text-white hover:bg-danger/90 transition-all flex items-center gap-1"
+                          >
+                            {deletingId === selectedFeedback.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete(null)}
+                            className="px-2 py-1 rounded-lg text-xs font-medium bg-muted text-muted-foreground hover:text-foreground transition-all"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDelete(selectedFeedback.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-danger/10 text-danger hover:bg-danger/20 transition-all"
+                          title="Delete feedback"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-              <div className="text-xs text-muted-foreground mb-6">
-                <p>By: {selectedFeedback.author?.name || selectedFeedback.authorName || "Anonymous"}</p>
-                <p>{formatDistanceToNow(new Date(selectedFeedback.createdAt), { addSuffix: true })}</p>
-              </div>
+                  <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                    {selectedFeedback.description}
+                  </p>
 
-              {/* Status changer */}
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Update Status
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {statuses.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => updateFeedbackStatus(selectedFeedback.id, s)}
-                      disabled={updatingStatus || selectedFeedback.status === s}
-                      className={`
-                        px-2.5 py-1 rounded-lg text-xs font-medium transition-all
-                        ${
-                          selectedFeedback.status === s
-                            ? "ring-2 ring-primary opacity-100"
-                            : "opacity-60 hover:opacity-100"
-                        }
-                        status-${s}
-                        disabled:cursor-not-allowed
-                      `}
-                    >
-                      {s.replace("_", " ")}
-                    </button>
-                  ))}
+                  <div className="text-xs text-muted-foreground mb-6">
+                    <p>By: {selectedFeedback.author?.name || selectedFeedback.authorName || "Anonymous"}</p>
+                    <p>{formatDistanceToNow(new Date(selectedFeedback.createdAt), { addSuffix: true })}</p>
+                  </div>
+
+                  {/* Status changer */}
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                      Update Status
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {statuses.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => updateFeedbackStatus(selectedFeedback.id, s)}
+                          disabled={updatingStatus || selectedFeedback.status === s}
+                          className={`
+                            px-2.5 py-1 rounded-lg text-xs font-medium transition-all
+                            ${
+                              selectedFeedback.status === s
+                                ? "ring-2 ring-primary opacity-100"
+                                : "opacity-60 hover:opacity-100"
+                            }
+                            status-${s}
+                            disabled:cursor-not-allowed
+                          `}
+                        >
+                          {s.replace("_", " ")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>

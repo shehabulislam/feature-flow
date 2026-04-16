@@ -8,10 +8,11 @@ import {
   FileText,
   TrendingUp,
   ChevronUp,
-  ArrowRight,
   Plus,
   FolderOpen,
   Shield,
+  Settings,
+  ExternalLink,
 } from "lucide-react";
 
 export default async function DashboardPage() {
@@ -212,13 +213,53 @@ export default async function DashboardPage() {
                   </div>
                 )}
 
-                <Link
-                  href={`/dashboard/feedback?project=${project.slug}`}
-                  className="flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover mt-4 transition-colors"
-                >
-                  Manage
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+                {/* Quick navigation links */}
+                <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <Link
+                      href={`/dashboard/feedback?project=${project.slug}`}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all"
+                      title="Feedback"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      Feedback
+                    </Link>
+                    <Link
+                      href={`/dashboard/roadmap?project=${project.slug}`}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-purple-500 hover:bg-purple-500/5 transition-all"
+                      title="Roadmap"
+                    >
+                      <Map className="w-3.5 h-3.5" />
+                      Roadmap
+                    </Link>
+                    <Link
+                      href={`/dashboard/changelog?project=${project.slug}`}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-cyan-500 hover:bg-cyan-500/5 transition-all"
+                      title="Changelog"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      Changelog
+                    </Link>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Link
+                      href={`/dashboard/settings`}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                      title="Settings"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                    </Link>
+                    <a
+                      href={`/p/${project.slug}/feedback`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all"
+                      title="Open public page"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
               </div>
             ))}
           </div>

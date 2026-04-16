@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Loader2, Trash2, X, Eye, EyeOff, FileText, Pencil, Calendar } from "lucide-react";
+import { Plus, Loader2, Trash2, X, Eye, EyeOff, FileText, Pencil, Calendar, FolderOpen } from "lucide-react";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
+import Link from "next/link";
 
 interface ChangelogEntry {
   id: string;
@@ -185,6 +186,28 @@ export default function ChangelogPage() {
       toast.error("Failed to delete");
     }
   };
+
+  // Show empty state if no projects exist
+  if (!loading && projects.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-20">
+        <div className="w-20 h-20 rounded-2xl bg-cyan-500/10 flex items-center justify-center mx-auto mb-5">
+          <FolderOpen className="w-10 h-10 text-cyan-500" />
+        </div>
+        <h2 className="text-xl font-bold mb-3">No project yet</h2>
+        <p className="text-muted-foreground mb-6">
+          Create a project first to start writing your changelog.
+        </p>
+        <Link
+          href="/dashboard/new-project"
+          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-all"
+        >
+          <Plus className="w-4 h-4" />
+          Create Project
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto">

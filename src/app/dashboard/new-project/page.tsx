@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, Zap, X, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 
@@ -12,6 +12,8 @@ export default function NewProjectPage() {
   const [description, setDescription] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,8 +30,8 @@ export default function NewProjectPage() {
 
       if (!res.ok) {
         if (data.requiresUpgrade) {
-          toast.error(data.error, { duration: 5000 });
-          router.push("/dashboard/settings");
+          setUpgradeMessage(data.error || "You've reached the project limit on your current plan.");
+          setShowUpgradeModal(true);
           return;
         }
         toast.error(data.error || "Failed to create project");
@@ -116,6 +118,71 @@ export default function NewProjectPage() {
           </button>
         </div>
       </form>
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-surface rounded-2xl border border-border shadow-2xl animate-scale-in">
+            <div className="flex items-center justify-between p-6 border-b border-border">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
+                  <Zap className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Upgrade Required</h3>
+                  <p className="text-xs text-muted-foreground">Your plan limit has been reached</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowUpgradeModal(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                {upgradeMessage}
+              </p>
+
+              <div className="p-4 rounded-xl bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 mb-6">
+                <p className="text-sm font-semibold text-foreground mb-1">Upgrade your plan to:</p>
+                <ul className="text-sm text-muted-foreground space-y-1 mt-2">
+                  <li className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    Create unlimited projects
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    Access advanced features
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    Priority support
+                  </li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowUpgradeModal(false)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted/50 transition-colors"
+                >
+                  Maybe later
+                </button>
+                <Link
+                  href="/dashboard/billing"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-white text-sm font-semibold hover:shadow-lg hover:shadow-primary/25 transition-all"
+                >
+                  Upgrade Plan
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -65,12 +65,17 @@ export async function GET(
         orderBy: { createdAt: "desc" },
         take: 20,
       },
-      subscription: {
+      entitlements: {
         select: {
-          status: true,
-          currentPeriodEnd: true,
-          cancelAtPeriodEnd: true,
+          fsLicenseId: true,
+          fsPlanId: true,
+          type: true,
+          expiration: true,
+          isCanceled: true,
+          createdAt: true,
         },
+        orderBy: { createdAt: "desc" },
+        take: 5,
       },
       _count: {
         select: {

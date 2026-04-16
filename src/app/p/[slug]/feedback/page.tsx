@@ -62,7 +62,17 @@ export default function PublicFeedbackPage() {
   const [commentName, setCommentName] = useState("");
   const [commentEmail, setCommentEmail] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
-  const [upvotedIds, setUpvotedIds] = useState<Set<string>>(new Set());
+  const [votingId, setVotingId] = useState<string | null>(null);
+  const [upvotedIds, setUpvotedIds] = useState<Set<string>>(() => {
+    // Restore from localStorage for instant UI on page load
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(`featureflow-upvotes-${slug}`);
+        if (saved) return new Set(JSON.parse(saved));
+      } catch { /* ignore */ }
+    }
+    return new Set();
+  });
   const [nameRequired, setNameRequired] = useState(true);
   const [emailRequired, setEmailRequired] = useState(true);
 
@@ -121,6 +131,29 @@ export default function PublicFeedbackPage() {
     fetchFeedbacks();
   }, [fetchFeedbacks]);
 
+  // Fetch upvote status from server after feedbacks load
+  useEffect(() => {
+    if (feedbacks.length === 0) return;
+    const feedbackIds = feedbacks.map((fb) => fb.id);
+    fetch("/api/feedback/upvote-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedbackIds }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.upvotedIds) {
+          const serverIds = new Set<string>(data.upvotedIds);
+          setUpvotedIds(serverIds);
+          localStorage.setItem(
+            `featureflow-upvotes-${slug}`,
+            JSON.stringify(data.upvotedIds)
+          );
+        }
+      })
+      .catch(() => { /* use cached localStorage values */ });
+  }, [feedbacks, slug]);
+
   const fetchComments = async (feedbackId: string) => {
     setLoadingComments(true);
     const res = await fetch(`/api/feedback/${feedbackId}/comments`);
@@ -139,6 +172,8 @@ export default function PublicFeedbackPage() {
   };
 
   const handleUpvote = async (feedbackId: string) => {
+    if (votingId) return; // prevent double-click
+    setVotingId(feedbackId);
     try {
       const res = await fetch(`/api/feedback/${feedbackId}/upvote`, { method: "POST" });
       const data = await res.json();
@@ -152,11 +187,18 @@ export default function PublicFeedbackPage() {
           const next = new Set(prev);
           if (data.upvoted) next.add(feedbackId);
           else next.delete(feedbackId);
+          // Persist to localStorage
+          localStorage.setItem(
+            `featureflow-upvotes-${slug}`,
+            JSON.stringify([...next])
+          );
           return next;
         });
       }
     } catch {
       toast.error("Failed to upvote");
+    } finally {
+      setVotingId(null);
     }
   };
 
@@ -239,12 +281,23 @@ export default function PublicFeedbackPage() {
           authorEmail: commentEmail,
         }),
       });
+      const data = await res.json();
       if (res.ok) {
         // Save user info for future use
         localStorage.setItem("featureflow-user", JSON.stringify({ name: commentName, email: commentEmail }));
         setNewComment("");
         fetchComments(selectedId);
         toast.success("Comment posted!");
+
+        // Auto sign-in the created customer account using login token
+        if (data.autoSignIn && data.loginToken) {
+          await signIn("login-token", {
+            token: data.loginToken,
+            redirect: false,
+          }).catch(() => { /* silent fail is ok */ });
+          // Refresh session so UI updates
+          await updateSession();
+        }
       }
     } catch {
       toast.error("Failed to post comment");
@@ -352,6 +405,7 @@ export default function PublicFeedbackPage() {
                     e.stopPropagation();
                     handleUpvote(fb.id);
                   }}
+                  disabled={votingId === fb.id}
                   className={`
                     flex flex-col items-center px-2 py-1.5 rounded-xl min-w-[48px]
                     transition-all duration-200
@@ -359,9 +413,14 @@ export default function PublicFeedbackPage() {
                       ? "bg-primary text-white shadow-lg shadow-primary/25"
                       : "bg-muted hover:bg-primary-light hover:text-primary-dark"
                     }
+                    ${votingId === fb.id ? "opacity-60 cursor-wait animate-pulse" : ""}
                   `}
                 >
-                  <ChevronUp className="w-4 h-4" />
+                  {votingId === fb.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ChevronUp className="w-4 h-4" />
+                  )}
                   <span className="text-sm font-bold">{fb.upvoteCount}</span>
                 </button>
 

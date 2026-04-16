@@ -26,7 +26,7 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const { status, category, title, description } = body;
+  const { status, category, title, description, isHidden } = body;
 
   const updated = await prisma.feedback.update({
     where: { id },
@@ -35,6 +35,7 @@ export async function PATCH(
       ...(category && { category }),
       ...(title && { title }),
       ...(description && { description }),
+      ...(isHidden !== undefined && { isHidden }),
     },
     include: {
       author: { select: { id: true, name: true, avatarUrl: true } },

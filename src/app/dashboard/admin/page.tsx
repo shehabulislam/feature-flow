@@ -98,11 +98,14 @@ interface UserDetail {
     createdAt: string;
     feedback: { title: string };
   }[];
-  subscription: {
-    status: string;
-    currentPeriodEnd: string | null;
-    cancelAtPeriodEnd: boolean;
-  } | null;
+  entitlements: {
+    fsLicenseId: string;
+    fsPlanId: string;
+    type: string;
+    expiration: string | null;
+    isCanceled: boolean;
+    createdAt: string;
+  }[];
   _count: {
     projects: number;
     feedbacks: number;
@@ -749,12 +752,17 @@ export default function AdminPage() {
                 <div className="text-xs text-muted-foreground space-y-1">
                   <p>Joined: {format(new Date(selectedUser.createdAt), "PPP 'at' p")}</p>
                   <p>Last updated: {format(new Date(selectedUser.updatedAt), "PPP 'at' p")}</p>
-                  {selectedUser.subscription && (
-                    <p>Subscription: {selectedUser.subscription.status}
-                      {selectedUser.subscription.currentPeriodEnd &&
-                        ` (expires ${format(new Date(selectedUser.subscription.currentPeriodEnd), "PP")})`
-                      }
-                    </p>
+                  {selectedUser.entitlements.length > 0 && (
+                    <div className="space-y-1">
+                      {selectedUser.entitlements.map((ent) => (
+                        <p key={ent.fsLicenseId}>
+                          License: {ent.type} — {ent.isCanceled ? "Canceled" : "Active"}
+                          {ent.expiration &&
+                            ` (expires ${format(new Date(ent.expiration), "PP")})`
+                          }
+                        </p>
+                      ))}
+                    </div>
                   )}
                 </div>
 

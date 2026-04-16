@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { NextRequest } from "next/server";
 import { hash } from "bcryptjs";
+import crypto from "crypto";
 
 export async function GET(
   _request: NextRequest,
@@ -52,6 +53,7 @@ export async function POST(
   }
 
   let userId = session?.user?.id || null;
+  let autoLoginToken: string | null = null;
 
   // Auto-create/find customer account if not logged in
   if (!userId && authorEmail) {
@@ -74,6 +76,15 @@ export async function POST(
     }
 
     userId = existingUser.id;
+
+    // Generate a one-time login token for auto sign-in
+    const loginToken = crypto.randomBytes(32).toString("hex");
+    const loginTokenExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    await prisma.user.update({
+      where: { id: existingUser.id },
+      data: { loginToken, loginTokenExpiry },
+    });
+    autoLoginToken = loginToken;
   }
 
   const isOfficial = session?.user?.id === feedback.project.ownerId;
@@ -91,5 +102,9 @@ export async function POST(
     },
   });
 
-  return Response.json({ comment }, { status: 201 });
+  return Response.json({
+    comment,
+    autoSignIn: !!autoLoginToken,
+    loginToken: autoLoginToken,
+  }, { status: 201 });
 }
