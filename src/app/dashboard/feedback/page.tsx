@@ -43,7 +43,10 @@ export default function FeedbackPage() {
 
   useEffect(() => {
     fetch("/api/projects")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         setProjects(data.projects || []);
         const saved = localStorage.getItem("featureflow-last-project");
@@ -53,6 +56,9 @@ export default function FeedbackPage() {
         } else if (data.projects?.length > 0) {
           setSelectedProject(data.projects[0].slug);
         }
+        setLoading(false);
+      })
+      .catch(() => {
         setLoading(false);
       });
   }, []);

@@ -46,10 +46,25 @@ export async function processPurchaseInfo(
 export async function getUserEntitlement(userId: string) {
   const entitlements = await prisma.userFsEntitlement.findMany({
     where: { userId, type: "subscription" },
+    orderBy: { createdAt: "desc" },
   });
-  return freemius.entitlement.getActive(
-    entitlements as unknown as PurchaseEntitlementData[]
-  );
+
+  if (entitlements.length === 0) return null;
+
+  // If multiple entitlements exist, evaluate each from newest to oldest
+  // and return the first active one, avoiding the "multiple active" error.
+  for (const entitlement of entitlements) {
+    try {
+      const active = freemius.entitlement.getActive(
+        [entitlement] as unknown as PurchaseEntitlementData[]
+      );
+      if (active) return active;
+    } catch {
+      // Not active or already expired, try next
+    }
+  }
+
+  return null;
 }
 
 /**
